@@ -15,7 +15,8 @@ adb logcat -c
 adb shell am start -W -n "$PKG/.MainActivity"
 sleep 15
 
-# Prints "x y" of the first screen element whose text or label is exactly $1 (empty if not found).
+# Prints "x y" of the first VISIBLE screen element whose text or label is exactly $1 (empty if none).
+# Elements below the screen have bounds [0,0][0,0] and are skipped.
 find_xy() {
   adb shell uiautomator dump /sdcard/ui.xml > /dev/null 2>&1
   adb pull /sdcard/ui.xml "$OUT/ui.xml" > /dev/null 2>&1
@@ -32,15 +33,21 @@ except Exception:
 for n in nodes:
     if n.get("text") == want or n.get("content-desc") == want:
         x1, y1, x2, y2 = map(int, re.findall(r"\d+", n.get("bounds", "")))
-        print((x1 + x2) // 2, (y1 + y2) // 2)
-        break
+        if x2 > x1 and y2 > y1:
+            print((x1 + x2) // 2, (y1 + y2) // 2)
+            break
 PY
 }
 
 TAPPED=""
 press() {
-  local xy
-  xy="$(find_xy "$1")"
+  local xy="" try
+  for try in 1 2 3; do
+    xy="$(find_xy "$1")"
+    [ -n "$xy" ] && break
+    adb shell input swipe 540 1600 540 700 300 # scroll down a little, then look again
+    sleep 2
+  done
   if [ -z "$xy" ]; then
     echo "Not on screen: $1"
     return 1

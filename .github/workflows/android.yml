@@ -103,6 +103,7 @@ jobs:
           APK: ${{ runner.temp }}/apk/one-thing.apk
         with:
           api-level: 33
+          profile: pixel_6
           target: google_apis_playstore
           arch: x86_64
           disable-animations: true
