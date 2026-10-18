@@ -59,10 +59,17 @@ jobs:
           cp app/build/outputs/apk/release/app-release.apk "$RUNNER_TEMP/one-thing.apk"
           rm -f "$ONE_THING_KEYSTORE"
 
-      - name: Check the signature
+      - name: Check the signature (must be the One Thing release key)
+        env:
+          # SHA-256 of the release certificate (public, not a secret). Another key = updates would fail.
+          EXPECTED_CERT: b39e49877047259f3957faf0d3b2058669730483c61a861bff61ee591a0b34dc
         run: |
+          set -o pipefail
           TOOLS="$ANDROID_HOME/build-tools/$(ls "$ANDROID_HOME/build-tools" | sort -V | tail -1)"
-          "$TOOLS/apksigner" verify --print-certs "$RUNNER_TEMP/one-thing.apk" | grep -E "Signer #1 certificate (DN|SHA-256 digest)"
+          echo "apksigner from $TOOLS"
+          OUT="$("$TOOLS/apksigner" verify --verbose --print-certs "$RUNNER_TEMP/one-thing.apk" 2>&1)"
+          echo "$OUT" | grep -iE "verifies|scheme|certificate (DN|SHA-256)" || echo "$OUT" | head -30
+          echo "$OUT" | tr -d ':' | tr 'A-F' 'a-f' | grep -q "$EXPECTED_CERT" || { echo "The APK is not signed with the One Thing key." >&2; exit 1; }
           ls -l "$RUNNER_TEMP/one-thing.apk"
 
       - name: Publish the APK
