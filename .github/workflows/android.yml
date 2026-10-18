@@ -1,0 +1,75 @@
+# Builds the One Thing Android app (APK) in the cloud and publishes it as a GitHub Release, so the
+# phone can download it from: https://github.com/<owner>/one-thing/releases/latest/download/one-thing.apk
+# Every build is signed with the same release key (GitHub Secrets), so a new APK installs over the
+# old one and keeps the data.
+name: Android APK
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+concurrency:
+  group: android-apk
+  cancel-in-progress: true
+
+jobs:
+  apk:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 22
+          cache: npm
+
+      - name: Build the web app
+        run: |
+          npm ci
+          npm run build
+
+      - name: Copy it into the Android project
+        run: npx cap sync android
+
+      - uses: actions/setup-java@v6
+        with:
+          distribution: temurin
+          java-version: 21
+          cache: gradle
+
+      - name: Build the signed APK
+        env:
+          VERSION_CODE: ${{ github.run_number }}
+          ONE_THING_KEYSTORE: ${{ runner.temp }}/release.jks
+          ONE_THING_KEYSTORE_PASSWORD: ${{ secrets.ONE_THING_KEYSTORE_PASSWORD }}
+          ONE_THING_KEY_ALIAS: ${{ secrets.ONE_THING_KEY_ALIAS }}
+          ONE_THING_KEY_PASSWORD: ${{ secrets.ONE_THING_KEY_PASSWORD }}
+          KEYSTORE_BASE64: ${{ secrets.ONE_THING_KEYSTORE_BASE64 }}
+        run: |
+          if [ -z "$KEYSTORE_BASE64" ]; then echo "The release key is missing from GitHub Secrets." >&2; exit 1; fi
+          echo "$KEYSTORE_BASE64" | base64 -d > "$ONE_THING_KEYSTORE"
+          cd android
+          chmod +x gradlew
+          ./gradlew --no-daemon assembleRelease
+          cp app/build/outputs/apk/release/app-release.apk "$RUNNER_TEMP/one-thing.apk"
+          rm -f "$ONE_THING_KEYSTORE"
+
+      - name: Check the signature
+        run: |
+          TOOLS="$ANDROID_HOME/build-tools/$(ls "$ANDROID_HOME/build-tools" | sort -V | tail -1)"
+          "$TOOLS/apksigner" verify --print-certs "$RUNNER_TEMP/one-thing.apk" | grep -E "Signer #1 certificate (DN|SHA-256 digest)"
+          ls -l "$RUNNER_TEMP/one-thing.apk"
+
+      - name: Publish the APK
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh release create "v1.0.${{ github.run_number }}" "$RUNNER_TEMP/one-thing.apk" \
+            --title "One Thing 1.0.${{ github.run_number }}" \
+            --notes "On your Android phone: download one-thing.apk, open it, tap Install (or Update)." \
+            --latest

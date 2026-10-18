@@ -1,0 +1,26 @@
+{
+  "id": "./",
+  "name": "One Thing",
+  "short_name": "One Thing",
+  "start_url": "./",
+  "scope": "./",
+  "display": "standalone",
+  "display_override": ["standalone"],
+  "background_color": "#F4F5F3",
+  "theme_color": "#0F766E",
+  "orientation": "portrait",
+  "icons": [
+    { "src": "icons/icon-192.png", "sizes": "192x192", "type": "image/png", "purpose": "any" },
+    { "src": "icons/icon-512.png", "sizes": "512x512", "type": "image/png", "purpose": "any" },
+    { "src": "icons/icon-maskable-512.png", "sizes": "512x512", "type": "image/png", "purpose": "maskable" }
+  ],
+  "shortcuts": [
+    {
+      "name": "Talk to One Thing",
+      "short_name": "Talk",
+      "description": "Speak or type what you need",
+      "url": "./?talk",
+      "icons": [{ "src": "icons/shortcut-talk-96.png", "sizes": "96x96", "type": "image/png" }]
+    }
+  ]
+}

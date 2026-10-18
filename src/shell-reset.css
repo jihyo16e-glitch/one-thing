@@ -1,0 +1,12 @@
+/* Shell reset — the artifact skeleton used to provide these. The real app carries them itself.
+   Keep this file separate from styles.css, which is copied byte-identical from gate 4 (static/index.html). */
+:root {
+  color-scheme: light;
+  box-sizing: border-box;
+  padding-top: env(safe-area-inset-top, 0px);
+  padding-bottom: env(safe-area-inset-bottom, 0px);
+}
+body { margin: 0; font: 14px/1.4 system-ui, sans-serif; }
+#root { height: 100%; }
+img { max-width: 100%; }
+[hidden] { display: none !important; }

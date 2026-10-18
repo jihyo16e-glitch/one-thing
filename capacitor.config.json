@@ -1,0 +1,14 @@
+{
+  "appId": "app.onething.seed",
+  "appName": "One Thing",
+  "webDir": "dist",
+  "android": {
+    "allowMixedContent": false
+  },
+  "plugins": {
+    "LocalNotifications": {
+      "smallIcon": "ic_stat_seed",
+      "iconColor": "#0F766E"
+    }
+  }
+}

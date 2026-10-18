@@ -1,0 +1,7 @@
+<?xml version='1.0' encoding='utf-8'?>
+<resources>
+    <string name="app_name">One Thing</string>
+    <string name="title_activity_main">One Thing</string>
+    <string name="package_name">app.onething.seed</string>
+    <string name="custom_url_scheme">app.onething.seed</string>
+</resources>

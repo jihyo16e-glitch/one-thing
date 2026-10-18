@@ -1,0 +1,12 @@
+node_modules/
+dist/
+.vercel/
+.vercel-personal/
+*.log
+.DS_Store
+Thumbs.db
+
+# The release key never goes into the repo (it lives outside this folder and in GitHub Secrets).
+*.jks
+*.keystore
+keystore*.txt
