@@ -1,0 +1,52 @@
+# Tries an already published release on an Android emulator (Actions tab -> Run workflow, give the tag).
+# Used to check whether a crash seen on a phone happens on Android 13 too.
+name: Smoke test a release
+
+on:
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: "Release tag, for example v1.0.3"
+        required: true
+
+permissions:
+  contents: read
+
+jobs:
+  smoke:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v7
+
+      - name: Download the APK of that release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          mkdir -p "$RUNNER_TEMP/apk"
+          gh release download "${{ inputs.tag }}" --repo "${{ github.repository }}" --pattern one-thing.apk --dir "$RUNNER_TEMP/apk"
+
+      - name: Let the emulator use hardware speed (KVM)
+        run: |
+          echo 'KERNEL=="kvm", GROUP="kvm", MODE="0666", OPTIONS+="static_node=kvm"' | sudo tee /etc/udev/rules.d/99-kvm4all.rules
+          sudo udevadm control --reload-rules
+          sudo udevadm trigger --name-match=kvm
+
+      - name: Open the app and tap the mic on Android 13
+        uses: reactivecircus/android-emulator-runner@v2
+        env:
+          APK: ${{ runner.temp }}/apk/one-thing.apk
+        with:
+          api-level: 33
+          target: google_apis_playstore
+          arch: x86_64
+          disable-animations: true
+          emulator-options: -no-window -gpu swiftshader_indirect -noaudio -no-boot-anim -camera-back none
+          script: bash scripts/emulator-smoke.sh "$APK"
+
+      - uses: actions/upload-artifact@v7
+        if: always()
+        with:
+          name: smoke-report
+          path: ${{ runner.temp }}/smoke
+          retention-days: 14

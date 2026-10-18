@@ -1,7 +1,7 @@
 // Speech to text. No AI API, no key, no LLM: the words go to the fixed rules in domain/commands.ts.
 // - Web (Chrome): the browser's Web Speech API = Google's speech service, needs internet.
-// - APK (Capacitor, 2026-10-18): Android's own SpeechRecognizer through @capgo/capacitor-speech-recognition,
-//   on the phone itself (offline) when the English pack is there, else Google's service.
+// - APK (Capacitor, 2026-10-18): Android's own SpeechRecognizer through @capgo/capacitor-speech-recognition
+//   (the phone's recognizer; Google's works offline by itself when the English pack is on the phone).
 //   Android WebView turns the Web Speech API off, so the APK must use the plugin.
 // The app never stores audio.
 import type { PluginListenerHandle } from '@capacitor/core';
@@ -137,12 +137,15 @@ function nativeCode(raw: unknown): string {
   return 'other';
 }
 
+// Never call SpeechRecognition.isOnDeviceRecognitionAvailable() (plugin 8.3.2): on Android 13+ it runs
+// SpeechRecognizer.checkRecognitionSupport() off the main thread, Android throws, and Capacitor turns
+// that into an app crash (2026-10-18, first phone test on an Infinix: tap the mic -> the app closed). The normal
+// recognizer below runs on the main thread, and Google's recognizer still works offline by itself when
+// the phone has the English pack.
 function listenNative(h: ListenHandlers): () => void {
   const handles: PluginListenerHandle[] = [];
   let heard = '';
   let error = '';
-  let onDevice = false;
-  let retried = false;
   let stopped = false;
   let done = false;
   const lang = language();
@@ -159,18 +162,13 @@ function listenNative(h: ListenHandlers): () => void {
     h.onEnd();
   };
   const start = () =>
-    SpeechRecognition.start({ language: lang, maxResults: 1, partialResults: true, popup: false, useOnDeviceRecognition: onDevice });
+    SpeechRecognition.start({ language: lang, maxResults: 1, partialResults: true, popup: false, useOnDeviceRecognition: false });
 
   (async () => {
     try {
       const perm = await SpeechRecognition.requestPermissions();
       if (perm.speechRecognition !== 'granted') return end('', 'not-allowed');
       if (!(await SpeechRecognition.available()).available) return end('', 'not-supported');
-      try {
-        onDevice = (await SpeechRecognition.isOnDeviceRecognitionAvailable({ language: lang })).available;
-      } catch {
-        onDevice = false;
-      }
       handles.push(
         await SpeechRecognition.addListener('partialResults', (e) => {
           const t = (e.matches?.[0] ?? e.accumulatedText ?? '').trim();
@@ -184,14 +182,6 @@ function listenNative(h: ListenHandlers): () => void {
       handles.push(
         await SpeechRecognition.addListener('listeningState', (e) => {
           if (e.state !== 'stopped' && e.status !== 'stopped') return;
-          // The offline English pack is missing: try once more with Google's online service.
-          if (error === 'language' && onDevice && !retried && !heard && !stopped) {
-            retried = true;
-            onDevice = false;
-            error = '';
-            start().catch((err: { code?: string }) => end('', nativeCode(err?.code)));
-            return;
-          }
           if (heard) return end(heard, '');
           SpeechRecognition.getLastPartialResult()
             .then((r) => end(r.available ? r.text.trim() : '', error || 'no-speech'))

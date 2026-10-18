@@ -13,6 +13,7 @@ import { TalkScreen } from './screens/TalkScreen';
 import { Icon } from './ui/Icon';
 import { ScrollThumb } from './ui/ScrollThumb';
 import { Mascot } from './ui/Mascot';
+import { CrashNotice } from './ui/CrashNotice';
 
 const SCREENS: Record<Tab, () => ReactElement> = {
   today: () => <TodayScreen />,
@@ -48,6 +49,7 @@ export default function App() {
           <Mascot mood="happy" size={120} />
         </div>
       )}
+      <CrashNotice />
       <p className={'toast' + (toastOn ? ' show' : '')} id="toast" role="status" aria-live="polite">{toastMsg}</p>
     </>
   );
