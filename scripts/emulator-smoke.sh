@@ -83,9 +83,16 @@ if [ -n "$XY" ]; then
   press "Save" || true
 fi
 if press "Start focus" && press "re:Start [0-9]+ minutes"; then
-  sleep 3
-  adb shell input keyevent KEYCODE_HOME
   sleep 5
+  echo "---- focus lock evidence after Start ----"
+  adb shell appops get "$PKG" | grep -iE "SYSTEM_ALERT_WINDOW|GET_USAGE_STATS" || true
+  adb shell dumpsys activity services "$PKG" | grep -iE "ServiceRecord|FocusLockService|isForeground" | head -5 || true
+  adb logcat -d -s OneThingFocus:V | tail -10
+  adb shell input keyevent KEYCODE_HOME
+  sleep 8
+  echo "---- after Home ----"
+  adb logcat -d -s OneThingFocus:V | tail -10
+  front
   if front | grep -q "$PKG"; then
     echo "Focus lock: Home was pressed during focus, and One Thing came back."
     press "Stop focus" && press "Stop" || true

@@ -18,6 +18,7 @@ import android.os.Handler;
 import android.os.IBinder;
 import android.os.Looper;
 import android.provider.Settings;
+import android.util.Log;
 import android.telecom.TelecomManager;
 import android.view.Gravity;
 import android.view.View;
@@ -39,6 +40,7 @@ import java.util.Set;
  */
 public class FocusLockService extends Service {
 
+    static final String TAG = "OneThingFocus";
     static final String PREFS = "focus_lock";
     static final String KEY_ENDS_AT = "ends_at";
     static final String EXTRA_ENDS_AT = "endsAt";
@@ -52,6 +54,7 @@ public class FocusLockService extends Service {
     private final Set<String> allowed = new HashSet<>();
     private long endsAt = 0;
     private long lastBounce = 0;
+    private String lastFront = null;
     private View overlay;
 
     private final Runnable tick = new Runnable() {
@@ -83,6 +86,7 @@ public class FocusLockService extends Service {
             return START_NOT_STICKY;
         }
         prefs.edit().putLong(KEY_ENDS_AT, endsAt).apply();
+        Log.i(TAG, "service start, ends in " + ((endsAt - System.currentTimeMillis()) / 1000) + " s");
         showOverlay();
         buildAllowList();
         running = true;
@@ -142,7 +146,8 @@ public class FocusLockService extends Service {
             View view = new View(this);
             windows.addView(view, params);
             overlay = view;
-        } catch (Exception ignored) {
+        } catch (Exception error) {
+            Log.w(TAG, "overlay failed: " + error);
             overlay = null;
         }
     }
@@ -183,17 +188,22 @@ public class FocusLockService extends Service {
         KeyguardManager keyguard = getSystemService(KeyguardManager.class);
         if (keyguard != null && keyguard.isKeyguardLocked()) return; // the phone is locked: nothing to do
         String front = frontPackage();
+        if (front != null && !front.equals(lastFront)) {
+            Log.i(TAG, "front app changed: " + front);
+            lastFront = front;
+        }
         if (front == null || front.equals(getPackageName()) || allowed.contains(front)) return;
         long now = System.currentTimeMillis();
         if (now - lastBounce < 400) return;
         lastBounce = now;
+        Log.i(TAG, "front app is " + front + ", bringing One Thing back");
         Intent back = new Intent(this, MainActivity.class).addFlags(
             Intent.FLAG_ACTIVITY_NEW_TASK | Intent.FLAG_ACTIVITY_REORDER_TO_FRONT | Intent.FLAG_ACTIVITY_SINGLE_TOP
         );
         try {
             startActivity(back);
-        } catch (Exception ignored) {
-            // the system refused this time; the next tick tries again
+        } catch (Exception error) {
+            Log.w(TAG, "bring back refused: " + error); // the next tick tries again
         }
     }
 

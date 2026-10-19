@@ -9,6 +9,7 @@ import android.net.Uri;
 import android.os.Build;
 import android.os.Process;
 import android.provider.Settings;
+import android.util.Log;
 import com.getcapacitor.JSObject;
 import com.getcapacitor.Plugin;
 import com.getcapacitor.PluginCall;
@@ -52,6 +53,7 @@ public class FocusLockPlugin extends Plugin {
         // read it as any Number.
         Object raw = call.getData().opt("endsAt");
         long endsAt = raw instanceof Number ? ((Number) raw).longValue() : 0;
+        Log.i(FocusLockService.TAG, "start asked: endsAt=" + raw + " overlay=" + canDrawOverlays() + " usage=" + hasUsageAccess());
         if (endsAt <= System.currentTimeMillis()) {
             call.reject("endsAt must be a time in the future.");
             return;
@@ -70,6 +72,7 @@ public class FocusLockPlugin extends Plugin {
             }
             call.resolve();
         } catch (Exception error) {
+            Log.w(FocusLockService.TAG, "service start failed: " + error);
             call.reject("Focus lock could not start: " + error.getMessage());
         }
     }
