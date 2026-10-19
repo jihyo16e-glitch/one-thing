@@ -48,8 +48,11 @@ public class FocusLockPlugin extends Plugin {
 
     @PluginMethod
     public void start(PluginCall call) {
-        Double endsAt = call.getDouble("endsAt");
-        if (endsAt == null || endsAt <= System.currentTimeMillis()) {
+        // A time in ms arrives as a Long, and PluginCall.getDouble() returns null for a Long (Capacitor 8.5):
+        // read it as any Number.
+        Object raw = call.getData().opt("endsAt");
+        long endsAt = raw instanceof Number ? ((Number) raw).longValue() : 0;
+        if (endsAt <= System.currentTimeMillis()) {
             call.reject("endsAt must be a time in the future.");
             return;
         }
@@ -58,7 +61,7 @@ public class FocusLockPlugin extends Plugin {
             return;
         }
         Context context = getContext();
-        Intent service = new Intent(context, FocusLockService.class).putExtra(FocusLockService.EXTRA_ENDS_AT, endsAt.longValue());
+        Intent service = new Intent(context, FocusLockService.class).putExtra(FocusLockService.EXTRA_ENDS_AT, endsAt);
         try {
             if (Build.VERSION.SDK_INT >= 26) {
                 context.startForegroundService(service);
