@@ -40,7 +40,7 @@ for n in nodes:
         hit = text == want or desc == want
     if hit:
         x1, y1, x2, y2 = map(int, re.findall(r"\d+", n.get("bounds", "")))
-        if x2 > x1 and y2 > y1:
+        if x2 > x1 and y2 - y1 >= 40:  # a sliver at the screen edge does not count: scroll first
             print((x1 + x2) // 2, (y1 + y2) // 2)
             break
 PY
@@ -85,6 +85,7 @@ fi
 if press "Start focus" && press "re:Start [0-9]+ minutes"; then
   sleep 5
   echo "---- focus lock evidence after Start ----"
+  if [ -n "$(find_xy "I finished it")" ]; then echo "Focus screen is open."; else echo "Focus screen did NOT open."; fi
   adb shell appops get "$PKG" | grep -iE "SYSTEM_ALERT_WINDOW|GET_USAGE_STATS" || true
   adb shell dumpsys activity services "$PKG" | grep -iE "ServiceRecord|FocusLockService|isForeground" | head -5 || true
   adb logcat -d -s OneThingFocus:V | tail -10
