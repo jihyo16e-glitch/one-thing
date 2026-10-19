@@ -31,7 +31,14 @@ try:
 except Exception:
     nodes = []
 for n in nodes:
-    if n.get("text") == want or n.get("content-desc") == want:
+    text, desc, cls = n.get("text") or "", n.get("content-desc") or "", n.get("class") or ""
+    if want.startswith("class:"):
+        hit = cls == want[6:]
+    elif want.startswith("re:"):
+        hit = bool(re.fullmatch(want[3:], text) or re.fullmatch(want[3:], desc))
+    else:
+        hit = text == want or desc == want
+    if hit:
         x1, y1, x2, y2 = map(int, re.findall(r"\d+", n.get("bounds", "")))
         if x2 > x1 and y2 > y1:
             print((x1 + x2) // 2, (y1 + y2) // 2)
@@ -60,6 +67,37 @@ press() {
 press "Skip" || true
 press "Talk: speak or type what you need" && press "Speak" || true
 sleep 10
+
+# ---- Focus lock (bounce-back): during focus, Home must bring One Thing back; after Stop it must not.
+adb shell appops set "$PKG" SYSTEM_ALERT_WINDOW allow || true
+adb shell appops set "$PKG" GET_USAGE_STATS allow || true
+front() { adb shell dumpsys activity activities | grep -E "topResumedActivity|mResumedActivity" | head -1; }
+LOCK="not tested (the focus screens were not found)"
+press "Today" || true
+XY="$(find_xy "class:android.widget.EditText")"
+if [ -n "$XY" ]; then
+  adb shell input tap $XY
+  sleep 1
+  adb shell input text "Smoke%stest%sfocus"
+  sleep 1
+  press "Save" || true
+fi
+if press "Start focus" && press "re:Start [0-9]+ minutes"; then
+  sleep 3
+  adb shell input keyevent KEYCODE_HOME
+  sleep 5
+  if front | grep -q "$PKG"; then
+    echo "Focus lock: Home was pressed during focus, and One Thing came back."
+    press "Stop focus" && press "Stop" || true
+    sleep 2
+    adb shell input keyevent KEYCODE_HOME
+    sleep 5
+    if front | grep -q "$PKG"; then LOCK="FAILED: still locked after Stop"; else LOCK="ok"; fi
+  else
+    LOCK="FAILED: Home left the app during focus"
+  fi
+fi
+echo "Focus lock: $LOCK"
 adb shell screencap -p /sdcard/smoke.png && adb pull /sdcard/smoke.png "$OUT/smoke.png" > /dev/null 2>&1
 
 adb logcat -d > "$OUT/logcat.txt"
@@ -77,4 +115,7 @@ if [ -z "$(adb shell pidof "$PKG")" ]; then
   echo "The app is not running any more."
   exit 1
 fi
+case "$LOCK" in
+  FAILED*) echo "The focus lock test failed."; exit 1 ;;
+esac
 echo "No crash. The app is still running."

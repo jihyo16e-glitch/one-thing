@@ -1,5 +1,6 @@
 <?xml version="1.0" encoding="utf-8"?>
-<manifest xmlns:android="http://schemas.android.com/apk/res/android">
+<manifest xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:tools="http://schemas.android.com/tools">
 
     <application
         android:allowBackup="true"
@@ -24,6 +25,16 @@
 
         </activity>
 
+        <!-- Focus lock: brings One Thing back during a focus session (FocusLockService.java). -->
+        <service
+            android:name=".FocusLockService"
+            android:exported="false"
+            android:foregroundServiceType="specialUse">
+            <property
+                android:name="android.app.PROPERTY_SPECIAL_USE_FGS_SUBTYPE"
+                android:value="Focus session: brings the focus screen back when the user leaves it" />
+        </service>
+
         <provider
             android:name="androidx.core.content.FileProvider"
             android:authorities="${applicationId}.fileprovider"
@@ -41,6 +52,15 @@
     <uses-permission android:name="android.permission.INTERNET" />
     <!-- Android 13+: exact reminders without a trip to Settings (granted at install for this side-loaded app). -->
     <uses-permission android:name="android.permission.USE_EXACT_ALARM" />
+
+    <!-- Focus lock (bounce-back). The user switches on "Display over other apps" and "Usage access"
+         in the phone settings; the app opens both pages for them. -->
+    <uses-permission android:name="android.permission.SYSTEM_ALERT_WINDOW" />
+    <uses-permission
+        android:name="android.permission.PACKAGE_USAGE_STATS"
+        tools:ignore="ProtectedPermissions" />
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE_SPECIAL_USE" />
 
     <!-- Android 11+: without this the app cannot see the phone's speech service at all. -->
     <queries>

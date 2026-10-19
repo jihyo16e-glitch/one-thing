@@ -1,4 +1,5 @@
-import type { ReactElement } from 'react';
+import { useEffect, type ReactElement } from 'react';
+import { lockStatus, stopLock } from './app/focusLock';
 import { useApp, type Tab } from './app/AppContext';
 import { TabBar } from './ui/TabBar';
 import { TodayScreen } from './screens/TodayScreen';
@@ -27,6 +28,12 @@ const SCREENS: Record<Tab, () => ReactElement> = {
 
 export default function App() {
   const { data, tab, go, enter, mainRef, toastMsg, toastOn, cheerKey } = useApp();
+  // A focus session lives only in memory. If the app restarts while the lock still runs (the phone closed
+  // the app), nothing on screen could stop it, so release it: the user must never get stuck.
+  useEffect(() => {
+    lockStatus().then((s) => { if (s.running) stopLock(); });
+  }, []);
+
   const welcome = !data.settings.welcomeDone;
   const fab = !welcome && tab === 'today'; // the mic button lives on Today, the home screen
   return (

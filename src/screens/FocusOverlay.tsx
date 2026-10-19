@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { useApp } from '../app/AppContext';
 import { exitFullscreen, releaseWake, requestWake } from '../app/focusDevice';
+import { stopLock } from '../app/focusLock';
 import { fmtClock } from '../domain/dates';
 import { getDay, todayKey } from '../domain/rules';
 import { Icon } from '../ui/Icon';
@@ -39,7 +40,10 @@ export function FocusOverlay() {
   }, [running, data.settings.focus.keepAwake]);
 
   const timeUp = useCallback(() => {
-    if (focus && !focus.timeUp) setFocus({ ...focus, timeUp: true, asking: false });
+    if (focus && !focus.timeUp) {
+      stopLock(); // the time is over: the phone is free again
+      setFocus({ ...focus, timeUp: true, asking: false });
+    }
   }, [focus, setFocus]);
 
   if (!focus) return null;
@@ -47,6 +51,7 @@ export function FocusOverlay() {
   const day = getDay(data, todayKey(data));
 
   function end() {
+    stopLock();
     releaseWake();
     exitFullscreen();
     setFocus(null);

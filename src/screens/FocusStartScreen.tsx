@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState, type ChangeEvent } from 'react';
 import { useApp } from '../app/AppContext';
 import { enterFullscreen, requestWake } from '../app/focusDevice';
+import { canLockFocus, lockReady, lockStatus, openOverlaySettings, openUsageSettings, startLock, type LockStatus } from '../app/focusLock';
 import { deletePicture, loadPicture, savePicture } from '../data/media';
 import { getDay, todayKey } from '../domain/rules';
 import { Icon } from '../ui/Icon';
@@ -29,6 +30,17 @@ export function FocusStartScreen() {
   const day = getDay(data, todayKey(data));
   const one = day && day.one.text ? day.one.text : '';
   const f = data.settings.focus;
+
+  // APK: the two switches the focus lock needs. Checked again when you come back from the phone settings.
+  const [lock, setLock] = useState<LockStatus>({ overlay: false, usage: false, running: false });
+  useEffect(() => {
+    if (!canLockFocus()) return;
+    const check = () => { lockStatus().then(setLock); };
+    check();
+    const onVisible = () => { if (document.visibilityState === 'visible') check(); };
+    document.addEventListener('visibilitychange', onVisible);
+    return () => document.removeEventListener('visibilitychange', onVisible);
+  }, []);
 
   // Show the saved picture: after a reload the context picture is null but settings.focus.pictureId
   // still points at the IndexedDB record. Also re-syncs when the saved id was changed elsewhere
@@ -124,7 +136,11 @@ export function FocusStartScreen() {
     if (!one) { toast('Pick your ONE thing first.'); return; }
     if (f.keepAwake) requestWake();
     if (f.fullScreen) enterFullscreen(); // from the tap itself, or the browser refuses
-    setFocus({ minutes: f.minutes, endsAt: Date.now() + f.minutes * 60000, asking: false, timeUp: false });
+    const endsAt = Date.now() + f.minutes * 60000;
+    setFocus({ minutes: f.minutes, endsAt, asking: false, timeUp: false });
+    if (canLockFocus() && lockReady(lock)) {
+      startLock(endsAt).then((ok) => { if (!ok) toast('Focus lock did not start. Focus runs without it.'); });
+    }
   }
 
   const back = (
@@ -198,17 +214,45 @@ export function FocusStartScreen() {
         {note && <p className="sub" role="status" style={{ color: 'var(--warn-ink)', fontWeight: 700 }}>{note}</p>}
       </section>
 
-      <section className="notice" aria-label="Lock the phone to this screen">
-        <h2 style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-          <Icon name="lock" size={20} />
-          <span>Lock the phone to this screen</span>
-        </h2>
-        <ol className="lock-steps">
-          <li>One time: open <strong>Settings</strong>, search <strong>{'“pin”'}</strong>, turn on <strong>App pinning</strong> and <strong>Ask for PIN before unpinning</strong>.</li>
-          <li>After you tap Start: open <strong>Recent apps</strong>, tap the One Thing icon, then tap <strong>Pin</strong>.</li>
-        </ol>
-        <p className="sub" style={{ color: 'var(--warn-ink)' }}>Then Home and other apps stay blocked until you unpin with your PIN.</p>
-      </section>
+      {canLockFocus() ? (
+        <section className={lockReady(lock) ? 'card' : 'notice'} aria-label="Focus lock">
+          <h2 style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+            <Icon name="lock" size={20} />
+            <span>Focus lock</span>
+          </h2>
+          {lockReady(lock) ? (
+            <p style={{ margin: 0 }}>
+              Ready. During focus, if you leave One Thing (Home, other apps, Settings), it comes right back.
+              Only <strong>Stop</strong> or <strong>I finished it</strong> ends focus. Calls still work.
+            </p>
+          ) : (
+            <>
+              <p style={{ margin: 0 }}>Switch on 2 things once, so One Thing can keep you in focus:</p>
+              <div className="lock-switch">
+                <span>1. Display over other apps</span>
+                {lock.overlay ? <span className="badge badge-accent">On</span> : <button type="button" className="btn btn-sm" onClick={openOverlaySettings}>Turn on</button>}
+              </div>
+              <div className="lock-switch">
+                <span>2. Usage access</span>
+                {lock.usage ? <span className="badge badge-accent">On</span> : <button type="button" className="btn btn-sm" onClick={openUsageSettings}>Turn on</button>}
+              </div>
+              <p className="sub" style={{ margin: 0 }}>On each page, find One Thing, switch it on, then come back here.</p>
+            </>
+          )}
+        </section>
+      ) : (
+        <section className="notice" aria-label="Lock the phone to this screen">
+          <h2 style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+            <Icon name="lock" size={20} />
+            <span>Lock the phone to this screen</span>
+          </h2>
+          <ol className="lock-steps">
+            <li>One time: open <strong>Settings</strong>, search <strong>{'“pin”'}</strong>, turn on <strong>App pinning</strong> and <strong>Ask for PIN before unpinning</strong>.</li>
+            <li>After you tap Start: open <strong>Recent apps</strong>, tap the One Thing icon, then tap <strong>Pin</strong>.</li>
+          </ol>
+          <p className="sub" style={{ color: 'var(--warn-ink)' }}>Then Home and other apps stay blocked until you unpin with your PIN.</p>
+        </section>
+      )}
 
       <div className="stack" style={{ gap: 2 }}>
         <label className="check-row">

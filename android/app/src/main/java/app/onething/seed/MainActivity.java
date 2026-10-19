@@ -16,6 +16,7 @@ public class MainActivity extends BridgeActivity {
     public void onCreate(Bundle savedInstanceState) {
         installCrashRecorder();
         registerPlugin(CrashLogPlugin.class); // before super.onCreate, which builds the bridge
+        registerPlugin(FocusLockPlugin.class);
         super.onCreate(savedInstanceState);
     }
 
