@@ -3,6 +3,7 @@ import { lockStatus, stopLock } from './app/focusLock';
 import { canTrackPhone, startBubble } from './app/screenTime';
 import { PUSHED, useApp, type Tab } from './app/AppContext';
 import { PhoneScreen, bubbleConfig } from './screens/PhoneScreen';
+import { BubbleSetup } from './screens/BubbleSetup';
 import { TabBar } from './ui/TabBar';
 import { TodayScreen } from './screens/TodayScreen';
 import { PlanScreen } from './screens/PlanScreen';
@@ -46,12 +47,14 @@ export default function App() {
   }, [bubbleKey]);
 
   const welcome = !data.settings.welcomeDone;
-  const fab = !welcome && tab === 'today'; // the mic button lives on Today, the home screen
+  // APK only: right after the welcome, ask once to turn on the scroll bubble (or skip).
+  const setup = !welcome && canTrackPhone() && !data.settings.phone.bubble && !data.settings.phone.bubbleAsked;
+  const fab = !welcome && !setup && tab === 'today'; // the mic button lives on Today, the home screen
   return (
     <>
       <div className="app" id="app">
         <main className={'screen' + (enter ? ' enter' : '') + (fab ? ' has-fab' : '')} id="screen" tabIndex={-1} aria-live="off" ref={mainRef}>
-          {welcome ? <WelcomeScreen /> : SCREENS[tab]()}
+          {welcome ? <WelcomeScreen /> : setup ? <BubbleSetup /> : SCREENS[tab]()}
         </main>
         <ScrollThumb target={mainRef} />
         {fab && (
@@ -59,7 +62,7 @@ export default function App() {
             <Icon name="mic" size={26} width={2} />
           </button>
         )}
-        {!welcome && <TabBar current={PUSHED.includes(tab) ? 'today' : tab} onGo={go} />}
+        {!welcome && !setup && <TabBar current={PUSHED.includes(tab) ? 'today' : tab} onGo={go} />}
       </div>
       <FocusOverlay />
       {cheerKey > 0 && (

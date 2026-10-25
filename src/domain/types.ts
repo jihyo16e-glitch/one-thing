@@ -65,6 +65,8 @@ export interface PhoneSettings {
   bubble: boolean;
   /** At the limit, a full-screen pause covers the scroll app (with the ONE thing and "5 more minutes"). */
   hardStop: boolean;
+  /** The first-open "Stop doom scrolling" setup was answered (bubble turned on, or Skip). It shows once. */
+  bubbleAsked: boolean;
 }
 
 export interface Idea {

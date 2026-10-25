@@ -6,8 +6,8 @@ export function defaultFocus(): FocusSettings {
   return { minutes: 50, keepAwake: true, fullScreen: true, pictureId: null };
 }
 
-/** The usual scroll apps (Facebook, Facebook Lite, Instagram, TikTok x2, YouTube, X, Reddit). The user can change the list. */
-export const DEFAULT_SCROLL_APPS = [
+/** The list before 2026-10-25 evening: saved settings still equal to it get the new list (the user never changed it). */
+export const OLD_DEFAULT_SCROLL_APPS = [
   'com.facebook.katana',
   'com.facebook.lite',
   'com.instagram.android',
@@ -18,8 +18,15 @@ export const DEFAULT_SCROLL_APPS = [
   'com.reddit.frontpage',
 ];
 
+/** The usual scroll apps: Facebook (+ Lite), Instagram (+ Lite), TikTok (2 regions + Lite), YouTube, X, Reddit. The user can change the list. */
+export const DEFAULT_SCROLL_APPS = [
+  ...OLD_DEFAULT_SCROLL_APPS,
+  'com.zhiliaoapp.musically.go',
+  'com.instagram.lite',
+];
+
 export function defaultPhone(): PhoneSettings {
-  return { scrollApps: [...DEFAULT_SCROLL_APPS], limitMin: 30, bubble: false, hardStop: true };
+  return { scrollApps: [...DEFAULT_SCROLL_APPS], limitMin: 30, bubble: false, hardStop: true, bubbleAsked: false };
 }
 
 /** welcomeDone defaults to true: saved data from before the welcome existed must not see it again. */

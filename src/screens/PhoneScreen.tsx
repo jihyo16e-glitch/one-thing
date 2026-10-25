@@ -106,7 +106,10 @@ export function PhoneScreen() {
   async function toggleBubble() {
     if (phone.bubble) {
       stopBubble();
-      commit((d) => { d.settings.phone.bubble = false; });
+      commit((d) => {
+        d.settings.phone.bubble = false;
+        d.settings.phone.bubbleAsked = true;
+      });
       toast('Bubble off.');
       refresh();
       return;
@@ -115,7 +118,10 @@ export function PhoneScreen() {
       toast('The bubble needs Usage access and Display over other apps.');
       return;
     }
-    commit((d) => { d.settings.phone.bubble = true; });
+    commit((d) => {
+      d.settings.phone.bubble = true;
+      d.settings.phone.bubbleAsked = true; // turning it off later must not bring the first-open setup back
+    });
     toast('Bubble on. Open a scroll app to see it.');
     refresh();
   }

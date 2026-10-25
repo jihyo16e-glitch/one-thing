@@ -11,6 +11,10 @@ mkdir -p "$OUT"
 adb install -r "$APK" || { echo "Install failed."; exit 1; }
 adb shell pm grant "$PKG" android.permission.RECORD_AUDIO || true
 adb shell pm grant "$PKG" android.permission.POST_NOTIFICATIONS || true
+# The two switches for the focus lock and the scroll bubble, set before the first open, so the first-open
+# "Stop doom scrolling" setup shows its last step at once (a user flips them in the phone settings).
+adb shell appops set "$PKG" SYSTEM_ALERT_WINDOW allow || true
+adb shell appops set "$PKG" GET_USAGE_STATS allow || true
 adb logcat -c
 adb shell am start -W -n "$PKG/.MainActivity"
 sleep 15
@@ -65,12 +69,17 @@ press() {
 }
 
 press "Skip" || true
+# ---- First-open setup (2026-10-25): right after the welcome, the APK asks to turn the scroll bubble on.
+SETUP="not shown"
+if press "Turn on the bubble"; then
+  sleep 2
+  if adb logcat -d -s OneThingScroll:V | grep -q "service start"; then SETUP="ok"; else SETUP="FAILED: the bubble did not start"; fi
+fi
+echo "First-open bubble setup: $SETUP"
 press "Talk: speak or type what you need" && press "Speak" || true
 sleep 10
 
 # ---- Focus lock (bounce-back): during focus, Home must bring One Thing back; after Stop it must not.
-adb shell appops set "$PKG" SYSTEM_ALERT_WINDOW allow || true
-adb shell appops set "$PKG" GET_USAGE_STATS allow || true
 front() { adb shell dumpsys activity activities | grep -E "topResumedActivity|mResumedActivity" | head -1; }
 LOCK="not tested (the focus screens were not found)"
 press "Today" || true
@@ -122,7 +131,9 @@ sleep 5
 press "Today" || true
 if press "re:See|Set up"; then
   sleep 3
-  if press "Turn the bubble on" && press "Scroll app: Settings"; then
+  # The first-open setup already turned it on; only press the switch if it is still off.
+  [ -n "$(find_xy "Turn the bubble off")" ] || press "Turn the bubble on" || true
+  if press "Scroll app: Settings"; then
     sleep 3
     adb shell am start -W -a android.settings.SETTINGS > /dev/null 2>&1
     sleep 8
@@ -174,5 +185,9 @@ case "$LOCK" in
 esac
 case "$BUBBLE" in
   FAILED*) echo "The scroll bubble test failed."; exit 1 ;;
+esac
+case "$SETUP" in
+  ok) ;;
+  *) echo "The first-open bubble setup test failed ($SETUP)."; exit 1 ;;
 esac
 echo "No crash. The app is still running."

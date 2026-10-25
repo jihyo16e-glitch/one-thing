@@ -9,7 +9,7 @@
 import type { AppData, Day, Decision, DecisionStep, Goal, Idea, MonthCheck, PhoneSettings, PlanPause, Settings, Task } from '../domain/types';
 import { MAX_TASKS, uid } from '../domain/rules';
 import { buildMock } from './mock';
-import { buildSeed, defaultFocus, defaultPhone, defaultSettings } from './seed';
+import { OLD_DEFAULT_SCROLL_APPS, buildSeed, defaultFocus, defaultPhone, defaultSettings } from './seed';
 
 export const STORAGE_KEY = 'onething.v1';
 const BROKEN_PREFIX = STORAGE_KEY + '.broken-';
@@ -63,7 +63,7 @@ function isSettingsLike(v: unknown): boolean {
     if (!isObj(p)) return false;
     const appsOk = none(p.scrollApps) || (Array.isArray(p.scrollApps) && p.scrollApps.every((x) => typeof x === 'string'));
     const limitOk = none(p.limitMin) || (typeof p.limitMin === 'number' && Number.isFinite(p.limitMin) && p.limitMin > 0);
-    if (!appsOk || !limitOk || !optBool(p.bubble) || !optBool(p.hardStop)) return false;
+    if (!appsOk || !limitOk || !optBool(p.bubble) || !optBool(p.hardStop) || !optBool(p.bubbleAsked)) return false;
   }
   const f = v.focus;
   if (none(f)) return true;
@@ -183,11 +183,16 @@ function fixSettings(v: unknown): Settings {
 function fixPhone(v: unknown): PhoneSettings {
   const p = obj(v);
   const def = defaultPhone();
+  let scrollApps = Array.isArray(p.scrollApps) ? p.scrollApps.filter((x): x is string => typeof x === 'string') : def.scrollApps;
+  if (scrollApps.length === OLD_DEFAULT_SCROLL_APPS.length && OLD_DEFAULT_SCROLL_APPS.every((x) => scrollApps.includes(x))) {
+    scrollApps = def.scrollApps; // never changed by the user: gets TikTok Lite and Instagram Lite too
+  }
   return {
-    scrollApps: Array.isArray(p.scrollApps) ? p.scrollApps.filter((x): x is string => typeof x === 'string') : def.scrollApps,
+    scrollApps,
     limitMin: typeof p.limitMin === 'number' && p.limitMin > 0 ? p.limitMin : def.limitMin,
     bubble: bool(p.bubble, def.bubble),
     hardStop: bool(p.hardStop, def.hardStop),
+    bubbleAsked: bool(p.bubbleAsked, def.bubbleAsked),
   };
 }
 
