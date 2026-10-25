@@ -1,4 +1,4 @@
-// First open in the APK (2026-10-25, Gilles's first phone test: "I open TikTok, I see nothing"): the bubble was off and
+// First open in the APK (2026-10-25, the first phone test: "I open TikTok, I see nothing"): the bubble was off and
 // its switch hidden in Phone time. This screen asks once: turn the scroll bubble on, or skip. One button walks the
 // user through the two phone switches in order, then turns the bubble on. It comes back only if never answered.
 import { useCallback, useEffect, useState } from 'react';
