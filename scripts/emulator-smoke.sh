@@ -110,7 +110,7 @@ echo "Focus lock: $LOCK"
 # ---- Phone time + scroll bubble (2026-10-25). The emulator has no TikTok, so the phone's Settings app plays the
 # scroll app: open it for over a minute (the list shows apps used for a full minute), mark it "Scroll", turn the
 # bubble on, open Settings again: the bubble must show, and a tap on it must bring One Thing back.
-BUBBLE="not tested (the Phone time screen was not found)"
+BUBBLE="not tested (a Phone time step was not found: see the Not on screen line above)"
 adb shell am start -W -a android.settings.SETTINGS > /dev/null 2>&1
 sleep 65
 adb shell am start -W -n "$PKG/.MainActivity" > /dev/null 2>&1

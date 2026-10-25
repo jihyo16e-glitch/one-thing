@@ -63,6 +63,8 @@ export interface PhoneSettings {
   scrollApps: string[]; // Android package names
   limitMin: number;
   bubble: boolean;
+  /** At the limit, a full-screen pause covers the scroll app (with the ONE thing and "5 more minutes"). */
+  hardStop: boolean;
 }
 
 export interface Idea {

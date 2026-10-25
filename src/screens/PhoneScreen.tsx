@@ -17,7 +17,10 @@ const SOFT_BTN = { background: 'var(--surface)', borderColor: 'var(--surface)', 
 /** What the bubble needs: the scroll apps, the limit, where the day starts, and today's ONE thing (shown at the limit). */
 export function bubbleConfig(d: AppData): BubbleConfig {
   const p = d.settings.phone;
-  return { apps: p.scrollApps, limitMin: p.limitMin, boundaryMin: minutesOf(d.settings.dayBoundary), one: getDay(d, todayKey(d))?.one.text ?? '' };
+  return {
+    apps: p.scrollApps, limitMin: p.limitMin, boundaryMin: minutesOf(d.settings.dayBoundary),
+    one: getDay(d, todayKey(d))?.one.text ?? '', hardStop: p.hardStop,
+  };
 }
 
 /** Access and today's app time, read now and each time the app comes back to the front (after the phone settings). */
@@ -176,7 +179,7 @@ export function PhoneScreen() {
         <h2>Floating bubble</h2>
         <p className="sub">
           A small bubble shows your scrolling minutes on top of scroll apps. It turns amber at half your limit and red at the
-          limit. Tap it to come back to your ONE thing.
+          limit. Tap it any time to come back to your ONE thing.
         </p>
         {!access.overlay ? (
           <>
@@ -188,6 +191,22 @@ export function PhoneScreen() {
             {phone.bubble ? 'Turn the bubble off' : 'Turn the bubble on'}
           </button>
         )}
+        <label className="check-row" style={{ alignItems: 'flex-start' }}>
+          <input
+            type="checkbox"
+            id="hard-stop"
+            checked={phone.hardStop}
+            onChange={(e) => {
+              const on = e.target.checked;
+              commit((d) => { d.settings.phone.hardStop = on; });
+              toast(on ? 'At your limit, a pause screen covers the app.' : 'At your limit, only the bubble turns red.');
+            }}
+          />
+          <span>
+            <strong>Pause at my limit.</strong> A full screen covers the scroll app and shows your ONE thing. You can take 5 more
+            minutes after a 5-second wait.
+          </span>
+        </label>
         {phone.bubble && access.overlay && !access.bubble && (
           <p className="sub" style={{ color: 'var(--warn-ink)', fontWeight: 700 }}>The bubble stopped (the phone closed it). Turn it off and on again.</p>
         )}

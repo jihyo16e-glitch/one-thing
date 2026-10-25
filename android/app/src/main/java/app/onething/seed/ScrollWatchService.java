@@ -26,6 +26,7 @@ import android.view.Gravity;
 import android.view.MotionEvent;
 import android.view.ViewConfiguration;
 import android.view.WindowManager;
+import android.widget.LinearLayout;
 import android.widget.TextView;
 import androidx.core.app.NotificationCompat;
 import java.text.SimpleDateFormat;
@@ -51,6 +52,10 @@ public class ScrollWatchService extends Service {
     static final String KEY_LIMIT = "limit_min";
     static final String KEY_BOUNDARY = "boundary_min";
     static final String KEY_ONE = "one";
+    static final String KEY_HARD = "hard_stop";
+    private static final String KEY_SNOOZE = "snooze_until";
+    private static final long SNOOZE_MS = 5 * 60_000;
+    private static final int SNOOZE_WAIT_S = 5; // "5 more minutes" works only after this wait: a small speed bump
     private static final String KEY_X = "x";
     private static final String KEY_Y = "y";
     private static final String KEY_TOLD = "told_day";
@@ -71,6 +76,10 @@ public class ScrollWatchService extends Service {
     private int limitMin = 30;
     private int boundaryMin = 0;
     private String one = "";
+    private boolean hardStop = true;
+    private long snoozeUntil = 0;
+    private LinearLayout pause; // the full-screen pause at the limit
+    private Runnable pauseCountdown;
     private TextView bubble;
     private WindowManager.LayoutParams params;
     private String front = null; // the app in front, as last seen in the usage log
@@ -111,6 +120,8 @@ public class ScrollWatchService extends Service {
         limitMin = Math.max(1, prefs.getInt(KEY_LIMIT, 30));
         boundaryMin = prefs.getInt(KEY_BOUNDARY, 0);
         one = prefs.getString(KEY_ONE, "");
+        hardStop = prefs.getBoolean(KEY_HARD, true);
+        snoozeUntil = prefs.getLong(KEY_SNOOZE, 0);
         countedAt = 0; // count again with the new list
         Log.i(TAG, "service start: " + apps.size() + " scroll apps, limit " + limitMin + " min");
         running = true;
@@ -123,6 +134,7 @@ public class ScrollWatchService extends Service {
     public void onDestroy() {
         handler.removeCallbacks(tick);
         removeBubble();
+        hidePause();
         running = false;
         super.onDestroy();
     }
@@ -156,6 +168,7 @@ public class ScrollWatchService extends Service {
         boolean locked = keyguard != null && keyguard.isKeyguardLocked();
         if (!screenOn || locked || FocusLockService.running) {
             hideBubble();
+            hidePause();
             inScroll = false;
             return;
         }
@@ -175,10 +188,17 @@ public class ScrollWatchService extends Service {
         inScroll = scroll;
         if (!scroll) {
             hideBubble();
+            hidePause();
             return;
         }
         long ms = countedMs + Math.max(0, now - countedAt);
-        showBubble(ms, now);
+        if (hardStop && ms >= limitMin * 60_000L && now >= snoozeUntil) {
+            hideBubble();
+            showPause(ms);
+        } else {
+            hidePause();
+            showBubble(ms, now);
+        }
     }
 
     /** When today began: the user's "my day ends at" time, so a late night still counts as the same day. */
@@ -204,7 +224,7 @@ public class ScrollWatchService extends Service {
         long minutes = ms / 60000;
         double part = ms / (limitMin * 60000.0);
         int color = part >= 1 ? STOP : part >= 0.5 ? HALF : CALM;
-        if (part >= 1) {
+        if (part >= 1 && !hardStop) { // with the pause on, the pause shows the ONE thing instead
             SharedPreferences prefs = getSharedPreferences(PREFS, MODE_PRIVATE);
             String day = new SimpleDateFormat("yyyy-MM-dd", Locale.US).format(dayStart(now));
             if (!day.equals(prefs.getString(KEY_TOLD, ""))) {
@@ -274,6 +294,128 @@ public class ScrollWatchService extends Service {
 
     private void hideBubble() {
         removeBubble();
+    }
+
+    /**
+     * The pause at the limit (2026-10-25): a full-screen cover over the scroll app with today's minutes, the ONE thing,
+     * "Open my ONE thing" and "5 more minutes" (which works only after a 5-second wait). The 20-buyer panel's most
+     * repeated wish: a bubble that only shows a number is easy to ignore. Pressing Home also clears it.
+     */
+    @SuppressWarnings("deprecation")
+    private void showPause(long ms) {
+        if (pause != null) return;
+        int dark = Color.parseColor("#F20D0F13");
+        int ink = Color.parseColor("#ECEDEF");
+        int muted = Color.parseColor("#A2A7B2");
+        int accent = Color.parseColor("#2DD4BF");
+        LinearLayout box = new LinearLayout(this);
+        box.setOrientation(LinearLayout.VERTICAL);
+        box.setGravity(Gravity.CENTER);
+        box.setBackgroundColor(dark);
+        box.setPadding(dp(28), dp(40), dp(28), dp(40));
+        box.setClickable(true); // touches stop here instead of reaching the app below
+
+        box.addView(text("Time to stop scrolling", 26, true, ink), wide(0));
+        box.addView(text((ms / 60000) + " min of scrolling today. Your limit is " + limitMin + " min.", 17, false, muted), wide(10));
+        TextView label = text("YOUR ONE THING", 13, true, accent);
+        label.setLetterSpacing(0.08f);
+        box.addView(label, wide(36));
+        box.addView(text(one.isEmpty() ? "What matters more than this right now?" : one, 22, true, ink), wide(8));
+
+        TextView open = pill("Open my ONE thing", accent, Color.parseColor("#0B2925"), accent);
+        open.setOnClickListener(v -> {
+            Log.i(TAG, "pause: open One Thing");
+            hidePause();
+            openApp();
+        });
+        box.addView(open, wide(36));
+        final TextView more = pill("5 more minutes (wait " + SNOOZE_WAIT_S + ")", Color.TRANSPARENT, muted, Color.parseColor("#3A3F4A"));
+        more.setEnabled(false);
+        more.setOnClickListener(v -> {
+            snoozeUntil = System.currentTimeMillis() + SNOOZE_MS;
+            getSharedPreferences(PREFS, MODE_PRIVATE).edit().putLong(KEY_SNOOZE, snoozeUntil).apply();
+            Log.i(TAG, "pause: 5 more minutes");
+            hidePause();
+        });
+        box.addView(more, wide(12));
+        final int[] left = { SNOOZE_WAIT_S };
+        pauseCountdown = new Runnable() {
+            @Override
+            public void run() {
+                left[0]--;
+                if (left[0] > 0) {
+                    more.setText("5 more minutes (wait " + left[0] + ")");
+                    handler.postDelayed(this, 1000);
+                } else {
+                    more.setText("5 more minutes");
+                    more.setTextColor(ink);
+                    more.setEnabled(true);
+                }
+            }
+        };
+        handler.postDelayed(pauseCountdown, 1000);
+
+        int type = Build.VERSION.SDK_INT >= 26 ? WindowManager.LayoutParams.TYPE_APPLICATION_OVERLAY : WindowManager.LayoutParams.TYPE_PHONE;
+        WindowManager.LayoutParams p = new WindowManager.LayoutParams(
+            WindowManager.LayoutParams.MATCH_PARENT,
+            WindowManager.LayoutParams.MATCH_PARENT,
+            type,
+            WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE | WindowManager.LayoutParams.FLAG_LAYOUT_IN_SCREEN,
+            PixelFormat.TRANSLUCENT
+        );
+        try {
+            getSystemService(WindowManager.class).addView(box, p);
+            pause = box;
+            Log.i(TAG, "pause shown at " + (ms / 60000) + " min");
+        } catch (Exception error) {
+            Log.w(TAG, "pause failed: " + error);
+            handler.removeCallbacks(pauseCountdown);
+            pauseCountdown = null;
+        }
+    }
+
+    private void hidePause() {
+        if (pauseCountdown != null) {
+            handler.removeCallbacks(pauseCountdown);
+            pauseCountdown = null;
+        }
+        if (pause == null) return;
+        try {
+            getSystemService(WindowManager.class).removeView(pause);
+        } catch (Exception ignored) {
+            // already gone
+        }
+        pause = null;
+    }
+
+    private TextView text(String s, float sp, boolean bold, int color) {
+        TextView t = new TextView(this);
+        t.setText(s);
+        t.setTextSize(TypedValue.COMPLEX_UNIT_SP, sp);
+        t.setTextColor(color);
+        t.setGravity(Gravity.CENTER);
+        if (bold) t.setTypeface(Typeface.DEFAULT_BOLD);
+        return t;
+    }
+
+    /** A rounded button drawn by hand: a service has no app theme, so a plain Button would look out of place. */
+    private TextView pill(String s, int fill, int color, int stroke) {
+        TextView t = text(s, 17, true, color);
+        GradientDrawable shape = new GradientDrawable();
+        shape.setColor(fill);
+        shape.setCornerRadius(dp(16));
+        shape.setStroke(dp(2), stroke);
+        t.setBackground(shape);
+        t.setMinHeight(dp(54));
+        t.setPadding(dp(16), dp(12), dp(16), dp(12));
+        t.setClickable(true);
+        return t;
+    }
+
+    private LinearLayout.LayoutParams wide(int topDp) {
+        LinearLayout.LayoutParams lp = new LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT);
+        lp.topMargin = dp(topDp);
+        return lp;
     }
 
     private void removeBubble() {

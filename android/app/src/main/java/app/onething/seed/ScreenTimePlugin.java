@@ -129,6 +129,7 @@ public class ScreenTimePlugin extends Plugin {
             prefs.putInt(ScrollWatchService.KEY_LIMIT, limit instanceof Number ? Math.max(1, ((Number) limit).intValue()) : 30);
             prefs.putInt(ScrollWatchService.KEY_BOUNDARY, boundary instanceof Number ? ((Number) boundary).intValue() : 0);
             prefs.putString(ScrollWatchService.KEY_ONE, call.getString("one", ""));
+            prefs.putBoolean(ScrollWatchService.KEY_HARD, call.getData().optBoolean("hardStop", true));
             prefs.apply();
             Intent service = new Intent(context, ScrollWatchService.class);
             if (Build.VERSION.SDK_INT >= 26) {
@@ -156,15 +157,28 @@ public class ScreenTimePlugin extends Plugin {
         call.resolve();
     }
 
-    /** The home screen and the system bars are not apps you "use", so they are left out of phone time. */
+    /**
+     * The home screen and the system bars are not apps you "use", so they are left out of phone time. Only the home
+     * screen app in use: the Settings app also has a "home" screen (FallbackHome, shown while the phone starts), and
+     * leaving out every home handler hid Settings from the count (seen on the emulator, 2026-10-25).
+     */
     private static Set<String> notApps(Context context) {
         Set<String> skip = new HashSet<>();
         skip.add("android");
         skip.add("com.android.systemui");
         try {
+            PackageManager pm = context.getPackageManager();
             Intent home = new Intent(Intent.ACTION_MAIN).addCategory(Intent.CATEGORY_HOME);
-            for (ResolveInfo info : context.getPackageManager().queryIntentActivities(home, 0)) {
-                if (info.activityInfo != null) skip.add(info.activityInfo.packageName);
+            ResolveInfo chosen = pm.resolveActivity(home, PackageManager.MATCH_DEFAULT_ONLY);
+            String pkg = chosen != null && chosen.activityInfo != null ? chosen.activityInfo.packageName : null;
+            if (pkg != null && !"android".equals(pkg)) {
+                skip.add(pkg);
+            } else { // no default home app picked yet: every home app except Settings
+                for (ResolveInfo info : pm.queryIntentActivities(home, 0)) {
+                    if (info.activityInfo != null && !"com.android.settings".equals(info.activityInfo.packageName)) {
+                        skip.add(info.activityInfo.packageName);
+                    }
+                }
             }
         } catch (Exception ignored) {
             // keep the short list

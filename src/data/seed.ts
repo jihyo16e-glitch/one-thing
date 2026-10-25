@@ -19,7 +19,7 @@ export const DEFAULT_SCROLL_APPS = [
 ];
 
 export function defaultPhone(): PhoneSettings {
-  return { scrollApps: [...DEFAULT_SCROLL_APPS], limitMin: 30, bubble: false };
+  return { scrollApps: [...DEFAULT_SCROLL_APPS], limitMin: 30, bubble: false, hardStop: true };
 }
 
 /** welcomeDone defaults to true: saved data from before the welcome existed must not see it again. */

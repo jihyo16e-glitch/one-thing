@@ -8,7 +8,7 @@ export interface AppUse { pkg: string; label: string; ms: number; opens: number 
 export interface Usage { apps: AppUse[]; totalMs: number }
 /** `battery` = battery saving leaves One Thing alone (else the phone may close the bubble). */
 export interface PhoneAccess { overlay: boolean; usage: boolean; bubble: boolean; battery: boolean }
-export interface BubbleConfig { apps: string[]; limitMin: number; boundaryMin: number; one: string }
+export interface BubbleConfig { apps: string[]; limitMin: number; boundaryMin: number; one: string; hardStop: boolean }
 
 interface ScreenTimePlugin {
   status(): Promise<PhoneAccess>;

@@ -63,7 +63,7 @@ function isSettingsLike(v: unknown): boolean {
     if (!isObj(p)) return false;
     const appsOk = none(p.scrollApps) || (Array.isArray(p.scrollApps) && p.scrollApps.every((x) => typeof x === 'string'));
     const limitOk = none(p.limitMin) || (typeof p.limitMin === 'number' && Number.isFinite(p.limitMin) && p.limitMin > 0);
-    if (!appsOk || !limitOk || !optBool(p.bubble)) return false;
+    if (!appsOk || !limitOk || !optBool(p.bubble) || !optBool(p.hardStop)) return false;
   }
   const f = v.focus;
   if (none(f)) return true;
@@ -187,6 +187,7 @@ function fixPhone(v: unknown): PhoneSettings {
     scrollApps: Array.isArray(p.scrollApps) ? p.scrollApps.filter((x): x is string => typeof x === 'string') : def.scrollApps,
     limitMin: typeof p.limitMin === 'number' && p.limitMin > 0 ? p.limitMin : def.limitMin,
     bubble: bool(p.bubble, def.bubble),
+    hardStop: bool(p.hardStop, def.hardStop),
   };
 }
 
