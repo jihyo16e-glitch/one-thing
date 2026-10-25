@@ -1,13 +1,9 @@
 package app.onething.seed;
 
-import android.Manifest;
-import android.app.AppOpsManager;
 import android.content.Context;
 import android.content.Intent;
-import android.content.pm.PackageManager;
 import android.net.Uri;
 import android.os.Build;
-import android.os.Process;
 import android.provider.Settings;
 import android.util.Log;
 import com.getcapacitor.JSObject;
@@ -96,20 +92,10 @@ public class FocusLockPlugin extends Plugin {
     }
 
     private boolean canDrawOverlays() {
-        return Build.VERSION.SDK_INT < 23 || Settings.canDrawOverlays(getContext());
+        return Access.canDrawOverlays(getContext());
     }
 
-    @SuppressWarnings("deprecation")
     private boolean hasUsageAccess() {
-        Context context = getContext();
-        AppOpsManager ops = (AppOpsManager) context.getSystemService(Context.APP_OPS_SERVICE);
-        if (ops == null) return false;
-        int mode = Build.VERSION.SDK_INT >= 29
-            ? ops.unsafeCheckOpNoThrow(AppOpsManager.OPSTR_GET_USAGE_STATS, Process.myUid(), context.getPackageName())
-            : ops.checkOpNoThrow(AppOpsManager.OPSTR_GET_USAGE_STATS, Process.myUid(), context.getPackageName());
-        if (mode == AppOpsManager.MODE_DEFAULT) {
-            return context.checkCallingOrSelfPermission(Manifest.permission.PACKAGE_USAGE_STATS) == PackageManager.PERMISSION_GRANTED;
-        }
-        return mode == AppOpsManager.MODE_ALLOWED;
+        return Access.hasUsageAccess(getContext());
     }
 }

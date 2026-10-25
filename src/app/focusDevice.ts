@@ -1,7 +1,7 @@
 // Phone features for Focus mode. Every call is optional: phones and some views refuse them, and that is fine.
 // The real lock (Home and other apps blocked) is Android App pinning — an OS feature the app only explains.
 
-interface WakeLockLike { release(): Promise<void> }
+interface WakeLockLike { release(): Promise<void>; released?: boolean }
 interface WakeLockApi { request(type: 'screen'): Promise<WakeLockLike> }
 
 let wakeLock: WakeLockLike | null = null;
@@ -9,6 +9,7 @@ let wakeLock: WakeLockLike | null = null;
 export function requestWake(): void {
   const api = (navigator as unknown as { wakeLock?: WakeLockApi }).wakeLock;
   if (!api) return;
+  if (wakeLock && !wakeLock.released) return; // one lock at a time; the browser drops it when the app is hidden
   api.request('screen').then((lock) => { wakeLock = lock; }).catch(() => { wakeLock = null; });
 }
 

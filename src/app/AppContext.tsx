@@ -6,9 +6,9 @@ import { afterUpdate, withTransition, type Direction } from '../ui/motion';
 
 const SAVE_FAILED_MSG = 'Could not save on this phone. Export a backup now.';
 
-export type Tab = 'today' | 'plan' | 'decide' | 'goals' | 'ideas' | 'focusStart' | 'talk';
+export type Tab = 'today' | 'plan' | 'decide' | 'goals' | 'ideas' | 'focusStart' | 'talk' | 'phone';
 /** Pages pushed on top of Today: they slide in and out like iOS (the tab bar shows Today). */
-const PUSHED: Tab[] = ['focusStart', 'talk'];
+export const PUSHED: Tab[] = ['focusStart', 'talk', 'phone'];
 
 // ---- Talk (2026-10-18): the chat with the seed. Kept here so it survives a tab switch; never stored. ----
 export type TalkAction =
@@ -39,6 +39,34 @@ const FIRST_TAB: Tab = firstTab(); // once per page load (a state initializer ma
 export type DecideView = 'home' | 'wizard' | 'saved' | 'log';
 export interface DecideState { view: DecideView; dec: Decision | null; savedId: string | null }
 export interface FocusSession { minutes: number; endsAt: number; asking: boolean; timeUp: boolean }
+
+/* The running focus session, outside the main data (it is not a plan, and a backup must not carry it).
+   First-use test A4: a reload during focus used to end the session with no word. */
+const FOCUS_KEY = 'onething.focus';
+const FOCUS_KEEP_MS = 12 * 60 * 60 * 1000; // a session that ended over 12 hours ago is not asked about any more
+
+function loadFocus(): FocusSession | null {
+  try {
+    const raw = window.localStorage.getItem(FOCUS_KEY);
+    if (!raw) return null;
+    const s = JSON.parse(raw) as { minutes?: unknown; endsAt?: unknown };
+    if (typeof s.minutes !== 'number' || typeof s.endsAt !== 'number') return null;
+    const now = Date.now();
+    if (now - s.endsAt > FOCUS_KEEP_MS) return null;
+    return { minutes: s.minutes, endsAt: s.endsAt, asking: false, timeUp: now >= s.endsAt }; // over → "Did you finish?"
+  } catch {
+    return null;
+  }
+}
+
+function saveFocus(s: FocusSession | null): void {
+  try {
+    if (s) window.localStorage.setItem(FOCUS_KEY, JSON.stringify({ minutes: s.minutes, endsAt: s.endsAt }));
+    else window.localStorage.removeItem(FOCUS_KEY);
+  } catch {
+    /* storage blocked: the session just lives in memory */
+  }
+}
 export interface Picture { url: string; name: string }
 /**
  * A night plan typed but not saved yet. `draft.key` is the target day (today or tomorrow).
@@ -238,13 +266,17 @@ export function AppProvider({ children }: { children: ReactNode }) {
   // ---- Talk ----
   const [talk, setTalk] = useState<TalkState>({ messages: [], pending: null });
 
-  // ---- focus mode ----
-  const [focus, setFocus] = useState<FocusSession | null>(null);
+  // ---- focus mode: the running session is kept, so a closed or reloaded app comes back to it ----
+  const [focus, setFocusRaw] = useState<FocusSession | null>(loadFocus);
+  const setFocus = useCallback((next: FocusSession | null) => {
+    setFocusRaw(next);
+    saveFocus(next);
+  }, []);
   const [picture, setPicture] = useState<Picture | null>(null);
 
   const value = useMemo<AppContextValue>(
     () => ({ data, commit, replaceData, tab, go, enter, slide, scrollTop, mainRef, decide, setDecide, openDecision, plan, setPlanState, focus, setFocus, picture, setPicture, toast, toastMsg, toastOn, cheer, cheerKey, talk, setTalk, startDecision }),
-    [data, commit, replaceData, tab, go, enter, slide, scrollTop, decide, setDecide, openDecision, plan, focus, picture, toast, toastMsg, toastOn, cheer, cheerKey, talk, startDecision],
+    [data, commit, replaceData, tab, go, enter, slide, scrollTop, decide, setDecide, openDecision, plan, focus, setFocus, picture, toast, toastMsg, toastOn, cheer, cheerKey, talk, startDecision],
   );
   return <Ctx.Provider value={value}>{children}</Ctx.Provider>;
 }

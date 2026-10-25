@@ -35,6 +35,27 @@
                 android:value="Focus session: brings the focus screen back when the user leaves it" />
         </service>
 
+        <!-- Phone time: the floating bubble with the user's own scrolling minutes (ScrollWatchService.java). -->
+        <service
+            android:name=".ScrollWatchService"
+            android:exported="false"
+            android:foregroundServiceType="specialUse">
+            <property
+                android:name="android.app.PROPERTY_SPECIAL_USE_FGS_SUBTYPE"
+                android:value="Digital wellbeing: shows the user's own scrolling time in a bubble over apps the user picked" />
+        </service>
+
+        <!-- Brings the bubble back after a phone restart or an app update (BootReceiver.java). -->
+        <receiver
+            android:name=".BootReceiver"
+            android:exported="false">
+            <intent-filter>
+                <action android:name="android.intent.action.BOOT_COMPLETED" />
+                <action android:name="android.intent.action.QUICKBOOT_POWERON" />
+                <action android:name="android.intent.action.MY_PACKAGE_REPLACED" />
+            </intent-filter>
+        </receiver>
+
         <!-- No EmojiCompat start-up: it binds the app to Google Play services' font provider, and Android
              kills every app bound to it when that process restarts (seen in the emulator during focus). The
              app draws its text in the web view, so it does not need it. -->
@@ -63,8 +84,11 @@
          SCHEDULE_EXACT_ALARM, RECEIVE_BOOT_COMPLETED, WAKE_LOCK (reminders). -->
 
     <uses-permission android:name="android.permission.INTERNET" />
-    <!-- Android 13+: exact reminders without a trip to Settings (granted at install for this side-loaded app). -->
-    <uses-permission android:name="android.permission.USE_EXACT_ALARM" />
+    <!-- Google Play allows USE_EXACT_ALARM only for alarm-clock and calendar apps. Reminders use
+         SCHEDULE_EXACT_ALARM (from the notifications plugin): the user allows "Alarms and reminders",
+         and until then a reminder may ring a little late (TalkScreen says so and opens the setting). -->
+    <uses-permission android:name="android.permission.USE_EXACT_ALARM" tools:node="remove" />
+    <uses-permission android:name="android.permission.RECEIVE_BOOT_COMPLETED" />
 
     <!-- Focus lock (bounce-back). The user switches on "Display over other apps" and "Usage access"
          in the phone settings; the app opens both pages for them. -->
@@ -75,10 +99,19 @@
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE_SPECIAL_USE" />
 
-    <!-- Android 11+: without this the app cannot see the phone's speech service at all. -->
+    <!-- Android 11+: without this the app cannot see the phone's speech service at all. Phone time also
+         needs to see the apps on the home screen (their names) and the home screen app (left out of the count). -->
     <queries>
         <intent>
             <action android:name="android.speech.RecognitionService" />
+        </intent>
+        <intent>
+            <action android:name="android.intent.action.MAIN" />
+            <category android:name="android.intent.category.LAUNCHER" />
+        </intent>
+        <intent>
+            <action android:name="android.intent.action.MAIN" />
+            <category android:name="android.intent.category.HOME" />
         </intent>
     </queries>
 </manifest>

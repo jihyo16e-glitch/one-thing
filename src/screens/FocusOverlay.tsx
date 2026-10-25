@@ -31,9 +31,10 @@ export function FocusOverlay() {
     if (focus) boxRef.current?.querySelector('button')?.focus();
   }, [focus?.endsAt]); // eslint-disable-line react-hooks/exhaustive-deps
 
-  // The screen lock is dropped when the app is hidden; ask again when it comes back.
+  // The screen lock is dropped when the app is hidden; ask again when it comes back (and after a restart).
   useEffect(() => {
     if (!running || !data.settings.focus.keepAwake) return;
+    requestWake();
     const onVisible = () => { if (document.visibilityState === 'visible') requestWake(); };
     document.addEventListener('visibilitychange', onVisible);
     return () => document.removeEventListener('visibilitychange', onVisible);

@@ -4,6 +4,7 @@
    Same example data as the gate 4 prototype (static/index.html). */
 import type { AppData, Day } from '../domain/types';
 import { appDayKey, isoDaysAgo } from '../domain/dates';
+import { defaultPhone } from './seed';
 
 export function buildMock(now: Date): AppData {
   const today = appDayKey(now, '05:30');
@@ -26,6 +27,7 @@ export function buildMock(now: Date): AppData {
       lastExportAt: isoDaysAgo(now, 9),
       focus: { minutes: 50, keepAwake: true, fullScreen: true, pictureId: null },
       welcomeDone: true,
+      phone: defaultPhone(),
     },
     days,
     goals: [
@@ -62,6 +64,8 @@ export function buildMock(now: Date): AppData {
         createdAt: isoDaysAgo(now, 2), decidedAt: isoDaysAgo(now, 2),
       },
     ],
+    checks: [],
+    pauses: [],
   };
 }
 /* ==== END MOCK BOUNDARY ==== */

@@ -48,12 +48,29 @@ export function appDayKey(now: Date, boundary: string): string {
   return ymd(new Date(now.getTime() - minutesOf(boundary) * 60000));
 }
 
+/** The moment the current app day began (the day boundary on the app day's date), in ms. */
+export function appDayStartMs(now: Date, boundary: string): number {
+  return parseKey(appDayKey(now, boundary)).getTime() + minutesOf(boundary) * 60000;
+}
+
+/** "45 min", "1 h 05 min" */
+export function fmtMinutes(ms: number): string {
+  const m = Math.round(ms / 60000);
+  return m < 60 ? m + ' min' : Math.floor(m / 60) + ' h ' + pad(m % 60) + ' min';
+}
+
 /** From the user's night plan time until the day boundary, Today pushes "Plan tomorrow". */
 export function isEvening(now: Date, planTime: string, boundary: string): boolean {
   const m = now.getHours() * 60 + now.getMinutes();
   const from = minutesOf(planTime);
   const to = minutesOf(boundary);
   return from > to ? m >= from || m < to : m >= from && m < to;
+}
+
+/** A saved "20:30" in the phone's own clock style ("8:30 PM" or "20:30"), the same style the time pickers show. */
+export function fmtTimeOfDay(hhmm: string): string {
+  const [h, m] = hhmm.split(':').map(Number);
+  return new Date(2000, 0, 1, h, m).toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' });
 }
 
 /** "09:05" */

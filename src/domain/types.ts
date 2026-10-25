@@ -1,12 +1,16 @@
 // The stored shape — GAUNTLET-BRIEF.md §7.5. One object in localStorage key "onething.v1" (gate 6).
 
-export type GoalStatus = 'active' | 'paused';
+/** 'done' and 'dropped' (= missed) goals stay in the list: they teach the late number. */
+export type GoalStatus = 'active' | 'paused' | 'done' | 'dropped';
+export type GoalLevel = 'year' | 'month' | 'week';
 
 export interface OneThing {
   text: string;
   goalId: string | null;
   done: boolean;
   doneAt: string | null;
+  /** What the user chose the next time, if it was not done: do it today, move it, or drop it. */
+  carry?: 'today' | 'moved' | 'dropped';
 }
 
 export interface Task {
@@ -27,7 +31,38 @@ export interface Goal {
   text: string;
   status: GoalStatus;
   createdAt: string;
-  date?: string; // YYYY-MM-DD, for goals with a fixed day (an exam, a trip)
+  date?: string; // YYYY-MM-DD: the planned day (or a fixed day: an exam, a trip)
+  /** The first planned day. Moving a goal keeps it, so "late" is measured against the first plan. */
+  firstDate?: string;
+  level?: GoalLevel;
+  /** A month goal is one piece of a year goal, a week goal one piece of a month goal (Law 5: chunks). */
+  parentId?: string;
+  doneDate?: string; // YYYY-MM-DD, the day it was really done or dropped
+  note?: string; // one line: why it was late, early or missed
+}
+
+/** The month-end check: goals written from memory first, then the real list. */
+export interface MonthCheck {
+  month: string; // YYYY-MM
+  recalled: string;
+  remembered: number;
+  total: number;
+  at: string;
+}
+
+/** A planned pause (a wedding, a trip): goal dates moved by its length, so nothing counts as late. */
+export interface PlanPause {
+  id: string;
+  from: string; // YYYY-MM-DD
+  to: string; // YYYY-MM-DD, included
+  reason: string;
+}
+
+/** Phone time (APK only): which apps count as scrolling, the daily limit, and the floating bubble. */
+export interface PhoneSettings {
+  scrollApps: string[]; // Android package names
+  limitMin: number;
+  bubble: boolean;
 }
 
 export interface Idea {
@@ -61,6 +96,8 @@ export interface Decision {
   actionDone: boolean;
   createdAt: string;
   decidedAt: string | null;
+  /** When the user tapped "Sleep on it". Today shows the decision again from the next day on. */
+  sleptAt?: string;
 }
 
 export interface FocusSettings {
@@ -77,6 +114,7 @@ export interface Settings {
   focus: FocusSettings;
   /** false only on a brand-new phone: the 3-step welcome shows until it is finished or skipped. */
   welcomeDone: boolean;
+  phone: PhoneSettings;
 }
 
 export interface AppData {
@@ -86,4 +124,6 @@ export interface AppData {
   goals: Goal[];
   ideas: Idea[];
   decisions: Decision[];
+  checks: MonthCheck[];
+  pauses: PlanPause[];
 }

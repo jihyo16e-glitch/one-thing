@@ -56,9 +56,11 @@ jobs:
           echo "$KEYSTORE_BASE64" | base64 -d > "$ONE_THING_KEYSTORE"
           cd android
           chmod +x gradlew
-          ./gradlew --no-daemon assembleRelease
+          # The APK is for phones (the release link); the AAB is the file Google Play takes, same key.
+          ./gradlew --no-daemon assembleRelease bundleRelease
           mkdir -p "$RUNNER_TEMP/apk"
           cp app/build/outputs/apk/release/app-release.apk "$RUNNER_TEMP/apk/one-thing.apk"
+          cp app/build/outputs/bundle/release/app-release.aab "$RUNNER_TEMP/apk/one-thing.aab"
           rm -f "$ONE_THING_KEYSTORE"
 
       - name: Check the signature (must be the One Thing release key)
@@ -71,12 +73,17 @@ jobs:
           OUT="$("$TOOLS/apksigner" verify --verbose --print-certs "$RUNNER_TEMP/apk/one-thing.apk" 2>&1)"
           echo "$OUT" | grep -iE "verifies|v2 scheme|certificate (DN|SHA-256)" || echo "$OUT" | head -30
           echo "$OUT" | tr -d ':' | tr 'A-F' 'a-f' | grep -q "$EXPECTED_CERT" || { echo "The APK is not signed with the One Thing key." >&2; exit 1; }
-          ls -l "$RUNNER_TEMP/apk/one-thing.apk"
+          AAB="$(keytool -printcert -jarfile "$RUNNER_TEMP/apk/one-thing.aab" 2>&1)"
+          echo "$AAB" | grep -iE "SHA256" | head -1
+          echo "$AAB" | tr -d ':' | tr 'A-F' 'a-f' | grep -q "$EXPECTED_CERT" || { echo "The AAB is not signed with the One Thing key." >&2; exit 1; }
+          ls -l "$RUNNER_TEMP/apk/"
 
       - uses: actions/upload-artifact@v7
         with:
           name: apk
-          path: ${{ runner.temp }}/apk/one-thing.apk
+          path: |
+            ${{ runner.temp }}/apk/one-thing.apk
+            ${{ runner.temp }}/apk/one-thing.aab
           retention-days: 14
 
   smoke:

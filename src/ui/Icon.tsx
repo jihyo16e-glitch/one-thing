@@ -3,7 +3,7 @@ import type { ReactElement } from 'react';
 export type IconName =
   | 'today' | 'plan' | 'decide' | 'goals' | 'ideas'
   | 'check' | 'plus' | 'play' | 'back' | 'trash' | 'lock' | 'list' | 'info' | 'sliders' | 'edit'
-  | 'mic' | 'send' | 'stop';
+  | 'mic' | 'send' | 'stop' | 'phone';
 
 // Same stroke paths as the gate 4 prototype. Decorative only (aria-hidden).
 const PATHS: Record<IconName, ReactElement> = {
@@ -62,6 +62,12 @@ const PATHS: Record<IconName, ReactElement> = {
   ),
   send: <path d="M12 19V5M5.5 11.5L12 5l6.5 6.5" />,
   stop: <rect x="7" y="7" width="10" height="10" rx="2" />,
+  phone: (
+    <>
+      <rect x="6.5" y="2.5" width="11" height="19" rx="2.5" />
+      <path d="M11 18.5h2" />
+    </>
+  ),
 };
 
 export function Icon({ name, size = 24, width = 1.8 }: { name: IconName; size?: number; width?: number }) {

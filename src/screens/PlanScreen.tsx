@@ -2,7 +2,7 @@ import { useEffect, useRef, type FormEvent } from 'react';
 import { useApp, type PlanState } from '../app/AppContext';
 import type { AppData } from '../domain/types';
 import { addDays, daysSince, fmtDay } from '../domain/dates';
-import { MAX_TASKS, activeGoals, addIdea, getDay, goalLabel, hasPlan, setPlan, todayKey, uid, type PlanDraft } from '../domain/rules';
+import { MAX_TASKS, activeGoals, addIdea, backupDue, getDay, goalLabel, hasPlan, setPlan, todayKey, uid, type PlanDraft } from '../domain/rules';
 import { Icon } from '../ui/Icon';
 
 /** The draft starts from what is already saved for the target day. Target = tomorrow, or today if asked. */
@@ -175,7 +175,7 @@ export function PlanScreen() {
           id="plan-one"
           type="text"
           maxLength={140}
-          placeholder="The one thing that matters most"
+          placeholder="What matters most?"
           value={draft.one}
           onChange={(e) => setDraft({ ...draft, one: e.target.value })}
         />
@@ -211,7 +211,7 @@ export function PlanScreen() {
         ))}
         {overflow ? (
           <div className="notice" role="status">
-            <p><strong>Max 3 tasks.</strong> Send {'“'}{overflow}{'”'} to Idea parking instead?</p>
+            <p><strong>Max 3 tasks.</strong> Send {'“'}{overflow}{'”'} to Ideas instead?</p>
             <div className="btn-row">
               <button type="button" className="btn btn-sm btn-dark" onClick={overflowToIdeas}>Send to Ideas</button>
               <button type="button" className="btn btn-sm" onClick={() => setOverflow('')}>Cancel</button>
@@ -244,16 +244,16 @@ export function PlanScreen() {
         <div className="btn-grid">
           <div className="stack" style={{ gap: 4 }}>
             <label className="lbl" htmlFor="plan-food">Food</label>
-            <input className="field" id="plan-food" type="text" maxLength={80} placeholder="What will you eat?" value={draft.food} onChange={(e) => setDraft({ ...draft, food: e.target.value })} />
+            <input className="field" id="plan-food" type="text" maxLength={80} placeholder="What to eat" value={draft.food} onChange={(e) => setDraft({ ...draft, food: e.target.value })} />
           </div>
           <div className="stack" style={{ gap: 4 }}>
             <label className="lbl" htmlFor="plan-clothes">Clothes</label>
-            <input className="field" id="plan-clothes" type="text" maxLength={80} placeholder="What will you wear?" value={draft.clothes} onChange={(e) => setDraft({ ...draft, clothes: e.target.value })} />
+            <input className="field" id="plan-clothes" type="text" maxLength={80} placeholder="What to wear" value={draft.clothes} onChange={(e) => setDraft({ ...draft, clothes: e.target.value })} />
           </div>
         </div>
       </section>
 
-      {(since === null || since > 7) && (
+      {backupDue(data) && (
         <div className="row-between" style={{ alignItems: 'center' }}>
           <span className="sub">{since === null ? 'No backup yet.' : 'Last backup: ' + since + ' days ago.'}</span>
           <button type="button" className="btn btn-sm btn-quiet" style={{ color: 'var(--accent-strong)', fontWeight: 700 }} onClick={() => go('goals')}>

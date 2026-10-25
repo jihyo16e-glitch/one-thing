@@ -192,6 +192,9 @@ export function FocusStartScreen() {
         </div>
       </section>
 
+      {/* Right under the length: new users had to scroll past the lock how-to to find it (first-use test D1). */}
+      <button type="button" className="btn btn-primary btn-block" onClick={start}>Start {f.minutes} minutes</button>
+
       <section className="stack" aria-label="Focus picture">
         <h2>Focus picture</h2>
         <div className="card" style={{ flexDirection: 'row', alignItems: 'center', padding: 12, gap: 14 }}>
@@ -264,8 +267,6 @@ export function FocusStartScreen() {
           <span>Full screen (hide the phone bars)</span>
         </label>
       </div>
-
-      <button type="button" className="btn btn-primary btn-block" onClick={start}>Start {f.minutes} minutes</button>
     </>
   );
 }

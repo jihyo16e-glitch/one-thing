@@ -6,9 +6,6 @@ import android.app.NotificationChannel;
 import android.app.NotificationManager;
 import android.app.PendingIntent;
 import android.app.Service;
-import android.app.usage.UsageEvents;
-import android.app.usage.UsageStatsManager;
-import android.content.Context;
 import android.content.Intent;
 import android.content.SharedPreferences;
 import android.content.pm.ServiceInfo;
@@ -208,21 +205,7 @@ public class FocusLockService extends Service {
     }
 
     /** The package of the app that came to the front last (Usage access), or null when unknown. */
-    @SuppressWarnings("deprecation")
     private String frontPackage() {
-        UsageStatsManager usage = (UsageStatsManager) getSystemService(Context.USAGE_STATS_SERVICE);
-        if (usage == null) return null;
-        long now = System.currentTimeMillis();
-        UsageEvents events = usage.queryEvents(now - 60_000, now);
-        if (events == null) return null;
-        UsageEvents.Event event = new UsageEvents.Event();
-        String front = null;
-        while (events.hasNextEvent()) {
-            events.getNextEvent(event);
-            if (event.getEventType() == UsageEvents.Event.MOVE_TO_FOREGROUND) { // = ACTIVITY_RESUMED on Android 10+
-                front = event.getPackageName();
-            }
-        }
-        return front;
+        return FrontApp.get(this, 60_000);
     }
 }

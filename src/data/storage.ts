@@ -6,10 +6,10 @@
 // - A field that is PRESENT but has the wrong type means the object is not AppData. Load keeps
 //   that value under "onething.v1.broken-<timestamp>" and starts from the first-run seed.
 //   User data is never deleted silently.
-import type { AppData, Day, Decision, DecisionStep, Goal, Idea, Settings, Task } from '../domain/types';
+import type { AppData, Day, Decision, DecisionStep, Goal, Idea, MonthCheck, PhoneSettings, PlanPause, Settings, Task } from '../domain/types';
 import { MAX_TASKS, uid } from '../domain/rules';
 import { buildMock } from './mock';
-import { buildSeed, defaultFocus, defaultSettings } from './seed';
+import { buildSeed, defaultFocus, defaultPhone, defaultSettings } from './seed';
 
 export const STORAGE_KEY = 'onething.v1';
 const BROKEN_PREFIX = STORAGE_KEY + '.broken-';
@@ -25,6 +25,10 @@ type Obj = Record<string, unknown>;
 const STEPS: readonly DecisionStep[] = ['type', 'choice2', 'feeling', 'tenten', 'regret', 'goals', 'identity', 'decision', 'action', 'done'];
 const TIME_RE = /^\d{2}:\d{2}$/; // same format GoalsScreen writes
 const DATE_RE = /^\d{4}-\d{2}-\d{2}$/;
+const MONTH_RE = /^\d{4}-\d{2}$/;
+const GOAL_STATUS = ['active', 'paused', 'done', 'dropped'] as const;
+const GOAL_LEVEL = ['year', 'month', 'week'] as const;
+const CARRY = ['today', 'moved', 'dropped'] as const;
 
 function isObj(v: unknown): v is Obj {
   return typeof v === 'object' && v !== null && !Array.isArray(v);
@@ -47,10 +51,20 @@ function optTime(v: unknown): boolean {
 function optOneOf(v: unknown, list: readonly unknown[]): boolean {
   return none(v) || list.includes(v);
 }
+function optDate(v: unknown): boolean {
+  return none(v) || (typeof v === 'string' && DATE_RE.test(v));
+}
 
 function isSettingsLike(v: unknown): boolean {
   if (!isObj(v)) return false;
   if (!optTime(v.planTime) || !optTime(v.dayBoundary) || !optIso(v.lastExportAt) || !optBool(v.welcomeDone)) return false;
+  const p = v.phone;
+  if (!none(p)) {
+    if (!isObj(p)) return false;
+    const appsOk = none(p.scrollApps) || (Array.isArray(p.scrollApps) && p.scrollApps.every((x) => typeof x === 'string'));
+    const limitOk = none(p.limitMin) || (typeof p.limitMin === 'number' && Number.isFinite(p.limitMin) && p.limitMin > 0);
+    if (!appsOk || !limitOk || !optBool(p.bubble)) return false;
+  }
   const f = v.focus;
   if (none(f)) return true;
   if (!isObj(f)) return false;
@@ -65,7 +79,7 @@ function isTaskLike(v: unknown): boolean {
 function isDayLike(v: unknown): boolean {
   if (!isObj(v) || !optIso(v.plannedAt)) return false;
   const o = v.one;
-  if (!none(o) && !(isObj(o) && optStr(o.text) && optStr(o.goalId) && optBool(o.done) && optIso(o.doneAt))) return false;
+  if (!none(o) && !(isObj(o) && optStr(o.text) && optStr(o.goalId) && optBool(o.done) && optIso(o.doneAt) && optOneOf(o.carry, CARRY))) return false;
   const t = v.tasks;
   if (!none(t) && !(Array.isArray(t) && t.every(isTaskLike))) return false;
   const s = v.small;
@@ -75,9 +89,26 @@ function isDayLike(v: unknown): boolean {
 
 function isGoalLike(v: unknown): boolean {
   return (
-    isObj(v) && typeof v.text === 'string' && optStr(v.id) && optOneOf(v.status, ['active', 'paused']) &&
-    optIso(v.createdAt) && (none(v.date) || (typeof v.date === 'string' && DATE_RE.test(v.date)))
+    isObj(v) && typeof v.text === 'string' && optStr(v.id) && optOneOf(v.status, GOAL_STATUS) &&
+    optIso(v.createdAt) && optDate(v.date) && optDate(v.firstDate) && optDate(v.doneDate) &&
+    optOneOf(v.level, GOAL_LEVEL) && optStr(v.parentId) && optStr(v.note)
   );
+}
+
+function isCheckLike(v: unknown): boolean {
+  return (
+    isObj(v) && typeof v.month === 'string' && MONTH_RE.test(v.month) && optStr(v.recalled) &&
+    (none(v.remembered) || typeof v.remembered === 'number') && (none(v.total) || typeof v.total === 'number') && optIso(v.at)
+  );
+}
+
+function isPauseLike(v: unknown): boolean {
+  return isObj(v) && typeof v.from === 'string' && DATE_RE.test(v.from) && typeof v.to === 'string' && DATE_RE.test(v.to) && optStr(v.id) && optStr(v.reason);
+}
+
+/** A list that may be missing (data from before it existed) but, when present, holds only items of the right shape. */
+function optList(v: unknown, ok: (x: unknown) => boolean): boolean {
+  return none(v) || (Array.isArray(v) && v.every(ok));
 }
 
 function isIdeaLike(v: unknown): boolean {
@@ -91,7 +122,7 @@ function isDecisionLike(v: unknown): boolean {
     optStr(v.feeling) && optBool(v.trustFeeling) && optStr(v.t10m) && optStr(v.t10mo) && optStr(v.t10y) &&
     optBool(v.regretOk) && optStr(v.goalId) && optBool(v.fitsIdentity) &&
     optStr(v.choice) && optStr(v.firstAction) && optBool(v.actionDone) &&
-    optIso(v.createdAt) && optIso(v.decidedAt)
+    optIso(v.createdAt) && optIso(v.decidedAt) && optIso(v.sleptAt)
   );
 }
 
@@ -107,6 +138,7 @@ export function isAppData(x: unknown): x is AppData {
   if (!Array.isArray(x.goals) || !x.goals.every(isGoalLike)) return false;
   if (!Array.isArray(x.ideas) || !x.ideas.every(isIdeaLike)) return false;
   if (!Array.isArray(x.decisions) || !x.decisions.every(isDecisionLike)) return false;
+  if (!optList(x.checks, isCheckLike) || !optList(x.pauses, isPauseLike)) return false;
   return true;
 }
 
@@ -144,12 +176,29 @@ function fixSettings(v: unknown): Settings {
       pictureId: strOrNull(f.pictureId),
     },
     welcomeDone: bool(s.welcomeDone, def.welcomeDone),
+    phone: fixPhone(s.phone),
+  };
+}
+
+function fixPhone(v: unknown): PhoneSettings {
+  const p = obj(v);
+  const def = defaultPhone();
+  return {
+    scrollApps: Array.isArray(p.scrollApps) ? p.scrollApps.filter((x): x is string => typeof x === 'string') : def.scrollApps,
+    limitMin: typeof p.limitMin === 'number' && p.limitMin > 0 ? p.limitMin : def.limitMin,
+    bubble: bool(p.bubble, def.bubble),
   };
 }
 
 function fixTask(v: unknown): Task {
   const t = obj(v);
   return { id: str(t.id, '') || uid('t'), text: str(t.text, ''), done: bool(t.done, false) };
+}
+
+function fixOne(o: Obj): Day['one'] {
+  const one: Day['one'] = { text: str(o.text, ''), goalId: strOrNull(o.goalId), done: bool(o.done, false), doneAt: strOrNull(o.doneAt) };
+  if (o.carry === 'today' || o.carry === 'moved' || o.carry === 'dropped') one.carry = o.carry;
+  return one;
 }
 
 /** Returns the repaired day, plus any task beyond the 3-task limit (it goes to Idea parking). */
@@ -161,7 +210,7 @@ function fixDay(v: unknown): { day: Day; overflow: Task[] } {
   return {
     day: {
       plannedAt: strOrNull(d.plannedAt),
-      one: { text: str(o.text, ''), goalId: strOrNull(o.goalId), done: bool(o.done, false), doneAt: strOrNull(o.doneAt) },
+      one: fixOne(o),
       tasks: tasks.slice(0, MAX_TASKS),
       small: { food: str(s.food, ''), clothes: str(s.clothes, '') },
     },
@@ -174,11 +223,34 @@ function fixGoal(v: unknown, now: string): Goal {
   const goal: Goal = {
     id: str(g.id, '') || uid('g'),
     text: str(g.text, ''),
-    status: g.status === 'paused' ? 'paused' : 'active',
+    status: GOAL_STATUS.find((x) => x === g.status) ?? 'active',
     createdAt: str(g.createdAt, now),
   };
+  // Optional fields are copied only when they exist, so an old goal stays as it was.
   if (typeof g.date === 'string') goal.date = g.date;
+  if (typeof g.firstDate === 'string') goal.firstDate = g.firstDate;
+  const level = GOAL_LEVEL.find((x) => x === g.level);
+  if (level) goal.level = level;
+  if (typeof g.parentId === 'string') goal.parentId = g.parentId;
+  if (typeof g.doneDate === 'string') goal.doneDate = g.doneDate;
+  if (typeof g.note === 'string') goal.note = g.note;
   return goal;
+}
+
+function fixCheck(v: unknown, now: string): MonthCheck {
+  const c = obj(v);
+  return {
+    month: str(c.month, ''),
+    recalled: str(c.recalled, ''),
+    remembered: typeof c.remembered === 'number' ? c.remembered : 0,
+    total: typeof c.total === 'number' ? c.total : 0,
+    at: str(c.at, now),
+  };
+}
+
+function fixPause(v: unknown): PlanPause {
+  const p = obj(v);
+  return { id: str(p.id, '') || uid('p'), from: str(p.from, ''), to: str(p.to, ''), reason: str(p.reason, '') };
 }
 
 function fixIdea(v: unknown, now: string): Idea {
@@ -221,6 +293,7 @@ function fixDecision(v: unknown, now: string): Decision {
   if (x.regretOk !== undefined) dec.regretOk = boolOrNull(x.regretOk);
   if (x.goalId !== undefined) dec.goalId = strOrNull(x.goalId);
   if (x.fitsIdentity !== undefined) dec.fitsIdentity = boolOrNull(x.fitsIdentity);
+  if (typeof x.sleptAt === 'string') dec.sleptAt = x.sleptAt;
   return dec;
 }
 
@@ -250,6 +323,8 @@ export function repairData(input: AppData): AppData {
     goals: list(x.goals).map((g) => fixGoal(g, now)),
     ideas: [...overflow, ...list(x.ideas).map((i) => fixIdea(i, now))],
     decisions: list(x.decisions).map((d) => fixDecision(d, now)),
+    checks: list(x.checks).map((c) => fixCheck(c, now)),
+    pauses: list(x.pauses).map(fixPause),
   };
 }
 

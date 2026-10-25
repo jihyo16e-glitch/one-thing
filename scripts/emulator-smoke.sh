@@ -106,6 +106,40 @@ if press "Start focus" && press "re:Start [0-9]+ minutes"; then
   fi
 fi
 echo "Focus lock: $LOCK"
+
+# ---- Phone time + scroll bubble (2026-10-25). The emulator has no TikTok, so the phone's Settings app plays the
+# scroll app: open it for over a minute (the list shows apps used for a full minute), mark it "Scroll", turn the
+# bubble on, open Settings again: the bubble must show, and a tap on it must bring One Thing back.
+BUBBLE="not tested (the Phone time screen was not found)"
+adb shell am start -W -a android.settings.SETTINGS > /dev/null 2>&1
+sleep 65
+adb shell am start -W -n "$PKG/.MainActivity" > /dev/null 2>&1
+sleep 5
+press "Today" || true
+if press "re:See|Set up"; then
+  sleep 3
+  if press "Turn the bubble on" && press "Scroll app: Settings"; then
+    sleep 3
+    adb shell am start -W -a android.settings.SETTINGS > /dev/null 2>&1
+    sleep 8
+    echo "---- bubble evidence ----"
+    adb logcat -d -s OneThingScroll:V | tail -15
+    adb shell dumpsys activity services "$PKG" | grep -iE "ScrollWatchService|isForeground" | head -4 || true
+    adb shell screencap -p /sdcard/bubble.png && adb pull /sdcard/bubble.png "$OUT/bubble.png" > /dev/null 2>&1
+    if adb logcat -d -s OneThingScroll:V | grep -q "bubble shown"; then
+      # The bubble's first place: 72 dp from the right edge, 30% down the screen; it is 56 dp wide.
+      read -r W H < <(adb shell wm size | grep -oE '[0-9]+x[0-9]+' | tail -1 | tr 'x' ' ')
+      D="$(adb shell wm density | grep -oE '[0-9]+' | tail -1)"
+      adb shell input tap $(( W - 72 * D / 160 + 28 * D / 160 )) $(( H * 3 / 10 + 28 * D / 160 ))
+      sleep 5
+      front
+      if front | grep -q "$PKG"; then BUBBLE="ok"; else BUBBLE="FAILED: tapping the bubble did not open One Thing"; fi
+    else
+      BUBBLE="FAILED: no bubble over the scroll app"
+    fi
+  fi
+fi
+echo "Scroll bubble: $BUBBLE"
 adb shell screencap -p /sdcard/smoke.png && adb pull /sdcard/smoke.png "$OUT/smoke.png" > /dev/null 2>&1
 
 adb logcat -d > "$OUT/logcat.txt"
@@ -125,5 +159,8 @@ if [ -z "$(adb shell pidof "$PKG")" ]; then
 fi
 case "$LOCK" in
   FAILED*) echo "The focus lock test failed."; exit 1 ;;
+esac
+case "$BUBBLE" in
+  FAILED*) echo "The scroll bubble test failed."; exit 1 ;;
 esac
 echo "No crash. The app is still running."

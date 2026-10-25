@@ -1,11 +1,21 @@
 import { useRef, useState, type FormEvent, type MouseEvent } from 'react';
 import { useApp } from '../app/AppContext';
-import { addDays, fmtDay, isEvening } from '../domain/dates';
-import { MAX_TASKS, addIdea, addTask, ensureDay, getDay, getGoal, hasPlan, pendingDecisions, removeTask, setOneText, todayKey, updateTask } from '../domain/rules';
+import { addDays, fmtDate, fmtDay, fmtTimeOfDay, isEvening } from '../domain/dates';
+import {
+  MAX_TASKS, addIdea, addTask, carryOne, dropOne, ensureDay, getDay, getGoal, hasPlan, pauseOn, removeTask,
+  setOneText, sleptDecisions, todayKey, unfinishedOne, updateTask, type CarryResult,
+} from '../domain/rules';
 import { Header } from '../ui/Header';
 import { Icon } from '../ui/Icon';
 import { Mascot } from '../ui/Mascot';
 import { buzz, popOnce, useFlip } from '../ui/motion';
+import { PhoneCard } from './PhoneScreen';
+
+const CARRIED: Record<CarryResult, string> = {
+  one: 'It is your ONE thing',
+  task: 'Added as a task',
+  idea: 'That day is full. Parked in Ideas',
+};
 
 export function TodayScreen() {
   const { data, commit, go, toast, openDecision, cheer } = useApp();
@@ -16,6 +26,7 @@ export function TodayScreen() {
   const [oneDraft, setOneDraft] = useState<string | null>(null); // null = not editing the ONE thing
   const [taskEdit, setTaskEdit] = useState<{ id: string; text: string } | null>(null);
   const [justAdded, setJustAdded] = useState<string | null>(null); // drops in with a soft tint
+  const [moveTo, setMoveTo] = useState<string | null>(null); // the day picker for "Move" on the carry-over card
   const tasksRef = useRef<HTMLElement>(null);
 
   const now = new Date();
@@ -27,6 +38,30 @@ export function TodayScreen() {
   const tomorrowDay = getDay(data, addDays(key, 1));
   const tomorrowPlanned = hasPlan(data, addDays(key, 1));
   const goal = day?.one.goalId ? getGoal(data, day.one.goalId) : null;
+  const pause = pauseOn(data, key);
+  const carry = pause ? null : unfinishedOne(data, key);
+
+  function carryToday() {
+    if (!carry) return;
+    const r = commit((d) => carryOne(d, carry.key, key, key));
+    if (r) toast(CARRIED[r] + (r === 'idea' ? '.' : ' today.'));
+  }
+
+  function carryMove(e: FormEvent) {
+    e.preventDefault();
+    if (!carry || !moveTo) return;
+    if (moveTo <= key) { toast('Pick a day after today.'); return; }
+    const target = moveTo;
+    const r = commit((d) => carryOne(d, carry.key, target, key));
+    setMoveTo(null);
+    if (r) toast(CARRIED[r] + (r === 'idea' ? '.' : ' on ' + fmtDate(target) + '.'));
+  }
+
+  function carryDrop() {
+    if (!carry) return;
+    commit((d) => dropOne(d, carry.key));
+    toast('Dropped. That is OK.');
+  }
 
   function toggleOne(e: MouseEvent<HTMLButtonElement>) {
     const doneNow = commit((d) => {
@@ -73,13 +108,22 @@ export function TodayScreen() {
     e.preventDefault();
     const text = newTask.trim();
     if (!text) { toast('Write the task first.'); return; }
-    const addedId = commit((d) => (addTask(d, key, text) ? getDay(d, key)?.tasks.at(-1)?.id ?? null : null));
-    setAdding(false);
     setNewTask('');
+    if (left <= 0) { // the box said so before typing: a full day sends it straight to Ideas
+      commit((d) => addIdea(d, text, 'overflow'));
+      setAdding(false);
+      toast('Today is full. Parked in Ideas.');
+      return;
+    }
+    const addedId = commit((d) => (addTask(d, key, text) ? getDay(d, key)?.tasks.at(-1)?.id ?? null : null));
     if (addedId) {
       setJustAdded(addedId);
       toast('Task added.');
-    } else setOverflow(text); // the 4th task is refused and offered to Idea parking
+      if (left <= 1) setAdding(false); // the box stays open until the day is full
+    } else {
+      setAdding(false);
+      setOverflow(text); // full meanwhile (a plan saved elsewhere): offered to Ideas
+    }
   }
 
   function overflowToIdeas() {
@@ -116,6 +160,41 @@ export function TodayScreen() {
 
   const left = day ? MAX_TASKS - day.tasks.length : MAX_TASKS;
 
+  const slept = sleptDecisions(data, key).map((p) => (
+    <section className="soft" aria-label="Decision to finish" key={p.id}>
+      <div className="stack" style={{ gap: 2 }}>
+        <span className="soft-label">You slept on this</span>
+        <span>{p.text}</span>
+      </div>
+      <button
+        type="button"
+        className="btn btn-sm"
+        style={{ background: 'var(--surface)', borderColor: 'var(--surface)', color: 'var(--accent-strong)', fontWeight: 700 }}
+        onClick={() => openDecision(p.id)}
+      >
+        Finish
+      </button>
+    </section>
+  ));
+
+  // Tomorrow's plan sits on top only at plan time; during the day, today's ONE thing comes first.
+  const tomorrowCard = tomorrowPlanned && tomorrowDay && (
+    <section className="soft" aria-label="Tomorrow is planned">
+      <div className="stack" style={{ gap: 2, minWidth: 0 }}>
+        <span className="soft-label">Tomorrow is planned</span>
+        <span style={{ overflowWrap: 'anywhere' }}>{tomorrowDay.one.text}</span>
+      </div>
+      <button
+        type="button"
+        className="btn btn-sm"
+        style={{ background: 'var(--surface)', borderColor: 'var(--surface)', color: 'var(--accent-strong)', fontWeight: 700, flex: 'none' }}
+        onClick={() => go('plan')}
+      >
+        Edit
+      </button>
+    </section>
+  );
+
   return (
     <>
       <Header sub={fmtDay(key)} title="Today" />
@@ -134,20 +213,40 @@ export function TodayScreen() {
         </section>
       )}
 
-      {tomorrowPlanned && tomorrowDay && (
-        <section className="soft" aria-label="Tomorrow is planned">
+      {evening && tomorrowCard}
+
+      {pause && (
+        <section className="soft" aria-label="Plan paused">
           <div className="stack" style={{ gap: 2, minWidth: 0 }}>
-            <span className="soft-label">Tomorrow is planned</span>
-            <span style={{ overflowWrap: 'anywhere' }}>{tomorrowDay.one.text}</span>
+            <span className="soft-label">Plan paused until {fmtDate(pause.to)}</span>
+            <span style={{ overflowWrap: 'anywhere' }}>{pause.reason ? pause.reason + '. ' : ''}Rest. Nothing counts as late.</span>
           </div>
-          <button
-            type="button"
-            className="btn btn-sm"
-            style={{ background: 'var(--surface)', borderColor: 'var(--surface)', color: 'var(--accent-strong)', fontWeight: 700, flex: 'none' }}
-            onClick={() => go('plan')}
-          >
-            Edit
-          </button>
+        </section>
+      )}
+
+      {carry && (
+        <section className="notice" aria-label="Not done last time">
+          <p>
+            <strong>{carry.key === addDays(key, -1) ? 'Not done yesterday' : 'Not done on ' + fmtDay(carry.key)}:</strong>{' '}
+            <span style={{ overflowWrap: 'anywhere' }}>{carry.day.one.text}</span>
+          </p>
+          <p>That is normal. What do you want to do with it?</p>
+          {moveTo === null ? (
+            <div className="btn-row">
+              <button type="button" className="btn btn-sm btn-dark" onClick={carryToday}>Do it today</button>
+              <button type="button" className="btn btn-sm" onClick={() => setMoveTo(addDays(key, 1))}>Move</button>
+              <button type="button" className="btn btn-sm" onClick={carryDrop}>Drop it</button>
+            </div>
+          ) : (
+            <form className="stack" onSubmit={carryMove}>
+              <label className="lbl" htmlFor="carry-date" style={{ color: 'inherit' }}>Move it to</label>
+              <input className="field" type="date" id="carry-date" min={addDays(key, 1)} value={moveTo} onChange={(e) => setMoveTo(e.target.value)} />
+              <div className="btn-row">
+                <button type="submit" className="btn btn-sm btn-dark">Move it</button>
+                <button type="button" className="btn btn-sm" onClick={() => setMoveTo(null)}>Cancel</button>
+              </div>
+            </form>
+          )}
         </section>
       )}
 
@@ -157,7 +256,7 @@ export function TodayScreen() {
             <div className="row-between" style={{ alignItems: 'center' }}>
               <p className="eyebrow">Your ONE thing</p>
               {oneDraft === null && (
-                <button type="button" className="edit-link" aria-label="Edit your ONE thing" onClick={() => setOneDraft(day.one.text)}>
+                <button type="button" className="edit-link" aria-label="Edit your ONE thing" onClick={() => { setOneDraft(day.one.text); setAdding(false); }}>
                   Edit
                 </button>
               )}
@@ -173,15 +272,19 @@ export function TodayScreen() {
             ) : (
               <>
                 <div className="one-row">
-                  <button
-                    type="button"
-                    className="check-lg"
-                    aria-pressed={day.one.done}
-                    aria-label={day.one.done ? 'Mark your ONE thing not done' : 'Mark your ONE thing done'}
-                    onClick={toggleOne}
-                  >
-                    <Icon name="check" size={22} width={2.6} />
-                  </button>
+                  <div className="check-col">
+                    <button
+                      type="button"
+                      className="check-lg"
+                      aria-pressed={day.one.done}
+                      aria-label={day.one.done ? 'Mark your ONE thing not done' : 'Mark your ONE thing done'}
+                      onClick={toggleOne}
+                    >
+                      <Icon name="check" size={22} width={2.6} />
+                    </button>
+                    {/* new users did not know the empty circle is the "done" button */}
+                    <span className="check-cap" aria-hidden="true">{day.one.done ? 'Done' : 'Done?'}</span>
+                  </div>
                   <p className={'one-text' + (day.one.done ? ' is-done' : '')}>{day.one.text}</p>
                 </div>
                 {goal && (
@@ -199,6 +302,8 @@ export function TodayScreen() {
               </>
             )}
           </section>
+
+          {slept}
 
           <section className="stack" aria-label="Tasks" ref={tasksRef}>
             <div className="row-between">
@@ -232,7 +337,7 @@ export function TodayScreen() {
                     <span className="dot"><Icon name="check" size={14} width={3} /></span>
                   </button>
                   <span className={'task-text' + (t.done ? ' is-done' : '')}>{t.text}</span>
-                  <button type="button" className="task-edit" aria-label={'Edit task: ' + t.text} onClick={() => setTaskEdit({ id: t.id, text: t.text })}>
+                  <button type="button" className="task-edit" aria-label={'Edit task: ' + t.text} onClick={() => { setTaskEdit({ id: t.id, text: t.text }); setAdding(false); }}>
                     <Icon name="edit" size={18} />
                   </button>
                 </div>
@@ -240,7 +345,7 @@ export function TodayScreen() {
             )}
             {overflow ? (
               <div className="notice" role="status">
-                <p><strong>Max 3 tasks.</strong> Send {'“'}{overflow}{'”'} to Idea parking instead?</p>
+                <p><strong>Max 3 tasks.</strong> Send {'“'}{overflow}{'”'} to Ideas instead?</p>
                 <div className="btn-row">
                   <button type="button" className="btn btn-sm btn-dark" onClick={overflowToIdeas}>Send to Ideas</button>
                   <button type="button" className="btn btn-sm" onClick={() => setOverflow('')}>Cancel</button>
@@ -248,10 +353,10 @@ export function TodayScreen() {
               </div>
             ) : adding ? (
               <div className="stack" style={{ gap: 6 }}>
-                <label className="lbl" htmlFor="new-task">New task</label>
+                <label className="lbl" htmlFor="new-task">{left > 0 ? 'New task' : 'Today is full (3 tasks). This goes to Ideas.'}</label>
                 <form className="inline-form" onSubmit={saveTask}>
-                  <input className="field" id="new-task" type="text" maxLength={120} placeholder="A small, clear task" autoFocus value={newTask} onChange={(e) => setNewTask(e.target.value)} />
-                  <button type="submit" className="btn btn-primary">Add</button>
+                  <input className="field" id="new-task" type="text" maxLength={120} placeholder={left > 0 ? 'A small, clear task' : 'An idea for later'} autoFocus value={newTask} onChange={(e) => setNewTask(e.target.value)} />
+                  <button type="submit" className="btn btn-primary">{left > 0 ? 'Add' : 'Park it'}</button>
                 </form>
                 <button type="button" className="btn btn-sm btn-quiet" style={{ alignSelf: 'flex-start' }} onClick={() => setAdding(false)}>Cancel</button>
               </div>
@@ -271,33 +376,22 @@ export function TodayScreen() {
           </div>
           <label className="lbl" htmlFor="quick-one">Pick your ONE thing now</label>
           <form className="inline-form" onSubmit={saveQuickOne}>
-            <input className="field" id="quick-one" type="text" maxLength={140} placeholder="The one thing that matters today" value={quickOne} onChange={(e) => setQuickOne(e.target.value)} />
+            <input className="field" id="quick-one" type="text" maxLength={140} placeholder="What matters most today?" value={quickOne} onChange={(e) => setQuickOne(e.target.value)} />
             <button type="submit" className="btn btn-primary">Save</button>
           </form>
         </section>
       )}
 
-      {pendingDecisions(data).map((p) => (
-        <section className="soft" aria-label="Decision to finish" key={p.id}>
-          <div className="stack" style={{ gap: 2 }}>
-            <span className="soft-label">You slept on this</span>
-            <span>{p.text}</span>
-          </div>
-          <button
-            type="button"
-            className="btn btn-sm"
-            style={{ background: 'var(--surface)', borderColor: 'var(--surface)', color: 'var(--accent-strong)', fontWeight: 700 }}
-            onClick={() => openDecision(p.id)}
-          >
-            Finish
-          </button>
-        </section>
-      ))}
+      {!(day && day.one.text) && slept}
+
+      {!evening && tomorrowCard}
+
+      <PhoneCard />
 
       {!evening && !tomorrowPlanned && (
         <button type="button" className="link-quiet" onClick={() => go('plan')}>
           <Icon name="plan" size={18} />
-          <span>Plan tomorrow tonight at {data.settings.planTime}</span>
+          <span>Plan tomorrow tonight at {fmtTimeOfDay(data.settings.planTime)}</span>
         </button>
       )}
     </>

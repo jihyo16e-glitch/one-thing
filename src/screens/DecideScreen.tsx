@@ -2,7 +2,7 @@ import { useState, type ReactNode } from 'react';
 import { useApp } from '../app/AppContext';
 import type { Decision, DecisionStep } from '../domain/types';
 import { fmtDate, ymd } from '../domain/dates';
-import { activeGoals, addIdea, getDecision, getGoal, goalLabel, newDecision, pendingDecisions, saveDecision } from '../domain/rules';
+import { activeGoals, addGoal, addIdea, getDecision, getGoal, goalLabel, newDecision, pendingDecisions, saveDecision } from '../domain/rules';
 import { Icon } from '../ui/Icon';
 import { Mascot } from '../ui/Mascot';
 
@@ -59,11 +59,21 @@ function ProgressBar({ step }: { step: DecisionStep }) {
   );
 }
 
-function NavRow({ nextEnabled, onBack, onNext }: { nextEnabled: boolean; onBack: () => void; onNext: () => void }) {
+/** Next looks faded until the step is answered; a tap then says what is missing (a dead button confused new users). */
+function NavRow({ nextEnabled, onBack, onNext, why = 'Pick an answer first.' }: { nextEnabled: boolean; onBack: () => void; onNext: () => void; why?: string }) {
+  const { toast } = useApp();
   return (
     <div className="btn-grid">
       <button type="button" className="btn btn-block" style={{ fontSize: 17 }} onClick={onBack}>Back</button>
-      <button type="button" className="btn btn-primary btn-block" style={{ fontSize: 17 }} disabled={!nextEnabled} onClick={onNext}>Next</button>
+      <button
+        type="button"
+        className="btn btn-primary btn-block"
+        style={{ fontSize: 17, opacity: nextEnabled ? 1 : 0.55 }}
+        aria-disabled={!nextEnabled}
+        onClick={() => (nextEnabled ? onNext() : toast(why))}
+      >
+        Next
+      </button>
     </div>
   );
 }
@@ -205,7 +215,7 @@ export function DecideScreen() {
         {list.map((d) => (
           <article className="log-item" key={d.id}>
             <div className="btn-row" style={{ gap: 6 }}>
-              <span className={'badge' + (d.type === 1 ? ' badge-accent' : '')}>{d.type === 1 ? 'Type 1 · think it through' : 'Type 2 · decide fast'}</span>
+              <span className={'badge' + (d.type === 1 ? ' badge-accent' : '')}>{d.type === 1 ? 'Big choice · think it through' : 'Small choice · decide fast'}</span>
               <span className="badge">{d.status === 'pending' ? 'Sleeping on it' : 'Decided'}</span>
             </div>
             <p style={{ fontWeight: 700, fontSize: 17, overflowWrap: 'anywhere' }}>{d.text}</p>
@@ -237,9 +247,14 @@ export function DecideScreen() {
     scrollTop();
   };
   const sleep = () => {
-    commit((draft) => saveDecision(draft, { ...d, status: 'pending', step: 'decision' }));
+    commit((draft) => saveDecision(draft, { ...d, status: 'pending', step: 'decision', sleptAt: new Date().toISOString() }));
     toHome();
-    toast('Saved. You will see it again on Today.');
+    toast('Saved. Tomorrow it shows on Today.');
+  };
+  const makeGoal = () => {
+    const id = commit((draft) => addGoal(draft, d.text).id);
+    patch({ goalId: id });
+    toast('Added to your goals. Tap Next.');
   };
   const park = () => {
     commit((draft) => {
@@ -340,14 +355,15 @@ export function DecideScreen() {
             </div>
             {d.goalId === 'none' && (
               <div className="notice" role="status">
-                <p>This does not help a goal right now. Park it as an idea, so it waits without taking your day?</p>
+                <p>This does not help a goal right now. Is it big enough to be a goal of its own? If not, park it as an idea, so it waits without taking your day.</p>
                 <div className="btn-row">
-                  <button type="button" className="btn btn-sm btn-dark" onClick={park}>Park it in Ideas</button>
+                  <button type="button" className="btn btn-sm btn-dark" onClick={makeGoal}>Make this a goal</button>
+                  <button type="button" className="btn btn-sm" onClick={park}>Park it in Ideas</button>
                 </div>
               </div>
             )}
           </section>
-          <NavRow nextEnabled={!!d.goalId} onBack={back} onNext={next} />
+          <NavRow nextEnabled={!!d.goalId} onBack={back} onNext={next} why="Pick a goal, or None of my goals." />
         </>
       );
       break;
@@ -421,13 +437,13 @@ export function DecideScreen() {
           <Icon name="back" size={20} width={2} />
           <span>Decide</span>
         </button>
-        {d.type ? <span className="badge badge-accent">Type {d.type}</span> : null}
+        {d.type ? <span className="badge badge-accent">{d.type === 1 ? 'Big choice' : 'Small choice'}</span> : null}
       </div>
       <section className="card" style={{ gap: 6, padding: 16 }} aria-label="Your decision">
         <p className="one-text" style={{ fontSize: 19 }}>{d.text}</p>
         {d.type ? (
           <p className="sub">
-            Can you fix it later? <strong style={{ color: 'var(--ink)' }}>{d.type === 2 ? 'Yes' : 'No'}</strong> {'→'} {d.type === 2 ? 'Type 2: decide fast.' : 'Type 1: take your time.'}
+            Can you fix it later? <strong style={{ color: 'var(--ink)' }}>{d.type === 2 ? 'Yes' : 'No'}</strong> {'→'} {d.type === 2 ? 'A small choice: decide fast.' : 'A big choice: take your time.'}
           </p>
         ) : null}
       </section>

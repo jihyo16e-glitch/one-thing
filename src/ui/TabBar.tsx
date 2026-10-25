@@ -1,7 +1,7 @@
 import type { Tab } from '../app/AppContext';
 import { Icon, type IconName } from './Icon';
 
-const TABS: { id: Exclude<Tab, 'focusStart' | 'talk'>; label: string; icon: IconName }[] = [
+const TABS: { id: Exclude<Tab, 'focusStart' | 'talk' | 'phone'>; label: string; icon: IconName }[] = [
   { id: 'today', label: 'Today', icon: 'today' },
   { id: 'plan', label: 'Plan', icon: 'plan' },
   { id: 'decide', label: 'Decide', icon: 'decide' },
