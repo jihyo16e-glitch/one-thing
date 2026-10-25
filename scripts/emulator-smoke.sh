@@ -74,7 +74,11 @@ adb shell appops set "$PKG" GET_USAGE_STATS allow || true
 front() { adb shell dumpsys activity activities | grep -E "topResumedActivity|mResumedActivity" | head -1; }
 LOCK="not tested (the focus screens were not found)"
 press "Today" || true
+# The web view does not always list its text box at once: look again, then tap the box's label instead.
 XY="$(find_xy "class:android.widget.EditText")"
+[ -z "$XY" ] && { sleep 3; XY="$(find_xy "class:android.widget.EditText")"; }
+[ -z "$XY" ] && XY="$(find_xy "Pick your ONE thing now")"
+cp "$OUT/ui.xml" "$OUT/ui-today.xml" 2>/dev/null || true
 if [ -n "$XY" ]; then
   adb shell input tap $XY
   sleep 1
@@ -127,11 +131,19 @@ if press "re:See|Set up"; then
     adb shell dumpsys activity services "$PKG" | grep -iE "ScrollWatchService|isForeground" | head -4 || true
     adb shell screencap -p /sdcard/bubble.png && adb pull /sdcard/bubble.png "$OUT/bubble.png" > /dev/null 2>&1
     if adb logcat -d -s OneThingScroll:V | grep -q "bubble shown"; then
-      # The bubble's first place: 72 dp from the right edge, 30% down the screen; it is 56 dp wide.
-      read -r W H < <(adb shell wm size | grep -oE '[0-9]+x[0-9]+' | tail -1 | tr 'x' ' ')
-      D="$(adb shell wm density | grep -oE '[0-9]+' | tail -1)"
-      adb shell input tap $(( W - 72 * D / 160 + 28 * D / 160 )) $(( H * 3 / 10 + 28 * D / 160 ))
+      # The service logs the bubble's real place ("bubble at X,Y size WxH"); a formula missed it by the status bar.
+      POS="$(adb logcat -d -s OneThingScroll:V | grep -oE 'bubble at [0-9]+,[0-9]+ size [0-9]+x[0-9]+' | tail -1)"
+      echo "bubble position: ${POS:-not logged}"
+      if [ -n "$POS" ]; then
+        read -r BX BY BW BH < <(echo "$POS" | sed -E 's/bubble at ([0-9]+),([0-9]+) size ([0-9]+)x([0-9]+)/\1 \2 \3 \4/')
+        adb shell input tap $(( BX + BW / 2 )) $(( BY + BH / 2 ))
+      else
+        read -r W H < <(adb shell wm size | grep -oE '[0-9]+x[0-9]+' | tail -1 | tr 'x' ' ')
+        D="$(adb shell wm density | grep -oE '[0-9]+' | tail -1)"
+        adb shell input tap $(( W - 72 * D / 160 + 28 * D / 160 )) $(( H * 3 / 10 + 28 * D / 160 ))
+      fi
       sleep 5
+      adb logcat -d -s OneThingScroll:V | grep -E "bubble tapped|open refused" | tail -2
       front
       if front | grep -q "$PKG"; then BUBBLE="ok"; else BUBBLE="FAILED: tapping the bubble did not open One Thing"; fi
     else

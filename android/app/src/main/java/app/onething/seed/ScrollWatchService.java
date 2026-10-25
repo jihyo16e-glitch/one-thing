@@ -267,6 +267,12 @@ public class ScrollWatchService extends Service {
             bubble = view;
             params = p;
             Log.i(TAG, "bubble shown");
+            // Its real place on the screen (the window sits below the status bar), for the emulator smoke test's tap.
+            view.post(() -> {
+                int[] at = new int[2];
+                view.getLocationOnScreen(at);
+                Log.i(TAG, "bubble at " + at[0] + "," + at[1] + " size " + view.getWidth() + "x" + view.getHeight());
+            });
         }
         GradientDrawable shape = new GradientDrawable();
         shape.setColor(color);
