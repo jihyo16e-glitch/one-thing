@@ -120,12 +120,24 @@ if press "Start focus" && press "re:Start [0-9]+ minutes"; then
 fi
 echo "Focus lock: $LOCK"
 
-# ---- Phone time + scroll bubble (2026-10-25). The emulator has no TikTok, so the phone's Settings app plays the
-# scroll app: open it for over a minute (the list shows apps used for a full minute), mark it "Scroll", turn the
-# bubble on, open Settings again: the bubble must show, and a tap on it must bring One Thing back.
+# ---- Phone time + scroll bubble (2026-10-25). The emulator has no TikTok, so the Clock app (else Contacts) plays the
+# scroll app: open it for over a minute (the list shows apps used for a full minute), mark it "Scroll", open it
+# again: the bubble must show, and a tap on it must bring One Thing back. NOT the Settings app: Android hides every
+# other app's overlay while Settings is in front (anti-tapjacking), so the bubble was "shown" but invisible there.
 BUBBLE="not tested (a Phone time step was not found: see the Not on screen line above)"
-adb shell am start -W -a android.settings.SETTINGS > /dev/null 2>&1
-sleep 65
+TEST_APP="Clock"
+open_test_app() {
+  if [ "$TEST_APP" = "Clock" ]; then
+    adb shell am start -W -a android.intent.action.SHOW_ALARMS > /dev/null 2>&1
+  else
+    adb shell am start -W -a android.intent.action.VIEW -d content://contacts/people > /dev/null 2>&1
+  fi
+}
+open_test_app
+sleep 3
+if ! front | grep -qi "clock"; then TEST_APP="Contacts"; open_test_app; sleep 3; fi
+echo "Test scroll app: $TEST_APP ($(front | grep -oE '[a-z]+(\.[a-z0-9_]+)+/' | head -1))"
+sleep 62
 adb shell am start -W -n "$PKG/.MainActivity" > /dev/null 2>&1
 sleep 5
 press "Today" || true
@@ -133,9 +145,9 @@ if press "re:See|Set up"; then
   sleep 3
   # The first-open setup already turned it on; only press the switch if it is still off.
   [ -n "$(find_xy "Turn the bubble off")" ] || press "Turn the bubble on" || true
-  if press "Scroll app: Settings"; then
+  if press "Scroll app: $TEST_APP"; then
     sleep 3
-    adb shell am start -W -a android.settings.SETTINGS > /dev/null 2>&1
+    open_test_app
     sleep 8
     echo "---- bubble evidence ----"
     adb logcat -d -s OneThingScroll:V | tail -15
